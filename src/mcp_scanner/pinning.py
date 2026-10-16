@@ -1,14 +1,23 @@
-"""Hash pinning of tool definitions and launch configurations (rug-pull detection).
+"""Hash pinning of tool, prompt and resource definitions and launch configurations.
 
 Trust on first use (TOFU): the first scan of a server stores SHA-256 hashes of
-its tool definitions, instructions and launch configuration in a pin file.
-Later scans report every change until it is approved with ``--update-pins``;
-changes are never re-pinned silently. ``--frozen-pins`` (for CI) disables TOFU:
-nothing is written and anything not already approved is reported.
+its tool definitions, prompts, resources, resource templates, instructions and
+launch configuration in a pin file. Later scans report every change until it is
+approved with ``--update-pins``; changes are never re-pinned silently.
+``--frozen-pins`` (for CI) disables TOFU: nothing is written and anything not
+already approved is reported (rug-pull detection).
 
 The pin file is meant to be reviewed and committed. It stores hashes, the
-approved tool definitions (to show diffs) and the *names* of environment
-variables and headers, never their values.
+approved definitions (to show diffs) and the *names* of environment variables
+and headers, never their values. Prompt and resource definitions are stored and
+hashed with provider tokens and URL credentials masked, and resources are keyed
+by their masked URI, so the pin file holds no secret they may embed.
+
+Format history: version 1 pinned tools, instructions and launch configurations.
+Version 2 adds ``prompts``, ``resources`` and ``resource_templates`` per server.
+Version 1 files still load; their servers get prompts and resources pinned on
+first use (or reported with ``--frozen-pins``) and the file is written back as
+version 2 the next time it changes.
 """
 
 from __future__ import annotations
@@ -21,17 +30,29 @@ import os
 import re
 import tempfile
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from . import TOOL_NAME, __version__
-from .models import Finding, Location, ServerConfig, ServerInventory, ToolDefinition
+from .models import (
+    Finding,
+    Location,
+    PromptDefinition,
+    ResourceDefinition,
+    ServerConfig,
+    ServerInventory,
+    Severity,
+    ToolDefinition,
+)
 from .rules.catalog import get
+from .rules.resources import resource_key
+from .rules.secrets import mask
 from .textutil import sanitize
 
-PIN_VERSION = 1
+PIN_VERSION = 2
+SUPPORTED_PIN_VERSIONS = frozenset({1, 2})
 ENV_PIN_PATH = "MCP_SCANNER_PINS"
 
 
@@ -64,6 +85,87 @@ def tool_digests(tool: ToolDefinition) -> dict[str, str]:
             {"inputSchema": raw.get("inputSchema"), "outputSchema": raw.get("outputSchema")}
         ),
     }
+
+
+def _redacted(value: Any) -> Any:
+    """Return a copy of ``value`` with provider tokens and URL credentials masked."""
+    if isinstance(value, str):
+        return mask(value)
+    if isinstance(value, list):
+        return [_redacted(item) for item in value]
+    if isinstance(value, dict):
+        return {mask(str(k)): _redacted(v) for k, v in value.items()}
+    return value
+
+
+def prompt_definition(prompt: PromptDefinition) -> dict[str, Any]:
+    """Return the pinned form of a prompt: its listing metadata with secrets masked."""
+    return _redacted(prompt.raw)
+
+
+def resource_definition(resource: ResourceDefinition) -> dict[str, Any]:
+    """Return the pinned form of a resource or template, with secrets masked.
+
+    ``size`` and ``annotations.lastModified`` describe the content rather than
+    the definition and change whenever the resource is edited, so they are left
+    out of the hash.
+    """
+    raw = {k: v for k, v in resource.raw.items() if k != "size"}
+    annotations = raw.get("annotations")
+    if isinstance(annotations, dict) and "lastModified" in annotations:
+        raw["annotations"] = {k: v for k, v in annotations.items() if k != "lastModified"}
+    return _redacted(raw)
+
+
+@dataclass(frozen=True)
+class _Kind:
+    """How one kind of prompt or resource definition is pinned and reported."""
+
+    attr: str  # ServerInventory attribute and pin-file key.
+    label: str
+    plural: str
+    subject: str  # Finding attribute naming the item: "prompt" or "resource".
+    pointer: str  # Field that locates the item: "name", "uri" or "uriTemplate".
+    changed_rule: str
+    key: Callable[[Any], str]
+    definition: Callable[[Any], dict[str, Any]]
+    new_severity: Severity | None = None
+
+
+_KINDS = (
+    _Kind(
+        "prompts",
+        "prompt",
+        "prompts",
+        "prompt",
+        "name",
+        "MCPS406",
+        lambda prompt: prompt.name,
+        prompt_definition,
+    ),
+    # Concrete resource lists are often dynamic (files, rows), so a new one is only LOW.
+    _Kind(
+        "resources",
+        "resource",
+        "resources",
+        "resource",
+        "uri",
+        "MCPS407",
+        resource_key,
+        resource_definition,
+        Severity.LOW,
+    ),
+    _Kind(
+        "resource_templates",
+        "resource template",
+        "resource templates",
+        "resource",
+        "uriTemplate",
+        "MCPS407",
+        resource_key,
+        resource_definition,
+    ),
+)
 
 
 def launch_components(server: ServerConfig) -> dict[str, str]:
@@ -135,12 +237,15 @@ class PinStore:
     path: Path
     servers: dict[str, dict[str, Any]] = field(default_factory=dict)
     exists: bool = False
+    version: int = PIN_VERSION  # Format of the file as loaded; saving writes PIN_VERSION.
 
     @classmethod
     def load(cls, path: str | Path) -> PinStore:
         """Load the pin file, or return an empty store if it does not exist.
 
-        Raise :class:`PinError` if the file is unreadable or invalid.
+        Every version in ``SUPPORTED_PIN_VERSIONS`` is accepted. Raise
+        :class:`PinError` if the file is unreadable, invalid or from a newer
+        format.
         """
         file_path = Path(path)
         if not file_path.exists():
@@ -151,9 +256,10 @@ class PinStore:
             raise PinError(f"cannot read pin file {file_path}: {exc}") from exc
         if not isinstance(data, dict) or not isinstance(data.get("servers"), dict):
             raise PinError(f"invalid pin file {file_path}: missing 'servers' object")
-        if data.get("version") != PIN_VERSION:
-            raise PinError(f"unsupported pin file version {data.get('version')!r}")
-        return cls(file_path, data["servers"], exists=True)
+        version = data.get("version")
+        if isinstance(version, bool) or version not in SUPPORTED_PIN_VERSIONS:
+            raise PinError(f"unsupported pin file version {version!r}")
+        return cls(file_path, data["servers"], exists=True, version=version)
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -185,6 +291,8 @@ class PinOutcome:
     findings: list[Finding] = field(default_factory=list)
     pinned_servers: list[str] = field(default_factory=list)
     pinned_tools: int = 0
+    pinned_prompts: int = 0
+    pinned_resources: int = 0  # Resources and resource templates.
     approved_changes: int = 0
     dirty: bool = False
 
@@ -216,6 +324,118 @@ def _describe_tool_change(record: dict[str, Any], tool: ToolDefinition) -> tuple
     )
 
 
+def _item_record(definition: dict[str, Any], now: str) -> dict[str, Any]:
+    return {"sha256": sha256_of(definition), "pinned_at": now, "definition": definition}
+
+
+def _describe_item_change(old_def: Any, new_def: dict[str, Any]) -> tuple[str, str]:
+    """Return the changed top-level fields of a prompt or resource and a compact diff."""
+    old_def = old_def if isinstance(old_def, dict) else {}
+    changed = sorted(k for k in {*old_def, *new_def} if old_def.get(k) != new_def.get(k))
+    old, new = old_def.get("description"), new_def.get("description")
+    if changed == ["description"] and isinstance(old, str) and isinstance(new, str):
+        return "description", text_diff(old, new)
+    old_part = {k: old_def.get(k) for k in changed}
+    new_part = {k: new_def.get(k) for k in changed}
+    return ", ".join(changed) or "definition", text_diff(_pretty(old_part), _pretty(new_part))
+
+
+def _inventory_summary(inv: ServerInventory) -> str:
+    parts = [f"{len(inv.tools)} tool(s)"]
+    for kind in _KINDS:
+        items = getattr(inv, kind.attr)
+        if items:
+            parts.append(f"{len(items)} {kind.label}(s)")
+    return ", ".join(parts)
+
+
+def _check_items(
+    entry: dict[str, Any],
+    inv: ServerInventory,
+    outcome: PinOutcome,
+    report: Callable[..., None],
+    *,
+    now: str,
+    update: bool,
+    frozen: bool,
+) -> None:
+    """Pin or compare the prompts, resources and resource templates of one server."""
+    name = inv.server
+    for kind in _KINDS:
+        items = getattr(inv, kind.attr)
+        if items is None:
+            continue  # Not collected (older manifest, failed listing): keep the approval.
+        current = {kind.key(item): item for item in items}
+        approved = entry.get(kind.attr)
+        if not isinstance(approved, dict):
+            # Never pinned: a new server, or one pinned by a format-1 file or before
+            # this kind was collected.
+            if frozen:
+                if current:
+                    report(
+                        "MCPS408",
+                        f"{kind.plural.capitalize()} of server {name!r} have never been "
+                        f"approved ({len(current)} {kind.label}(s))",
+                        inv.locate(),
+                        server=name,
+                    )
+                continue
+            entry[kind.attr] = {
+                key: _item_record(kind.definition(item), now) for key, item in current.items()
+            }
+            if kind.attr == "prompts":
+                outcome.pinned_prompts += len(current)
+            else:
+                outcome.pinned_resources += len(current)
+            outcome.dirty = True
+            continue
+
+        for key, item in current.items():
+            definition = kind.definition(item)
+            record = approved.get(key)
+            subject = {kind.subject: key}
+            if isinstance(record, dict) and record.get("sha256") == sha256_of(definition):
+                continue
+            if update:
+                approved[key] = _item_record(definition, now)
+                outcome.approved_changes += 1
+                outcome.dirty = True
+            elif not isinstance(record, dict):
+                report(
+                    "MCPS408",
+                    f"New {kind.label} {key!r} appeared after the server was approved",
+                    item.locate(kind.pointer),
+                    server=name,
+                    field=kind.pointer,
+                    severity=kind.new_severity,
+                    **subject,
+                )
+            else:
+                what, evidence = _describe_item_change(record.get("definition"), definition)
+                report(
+                    kind.changed_rule,
+                    f"Definition of {kind.label} {key!r} changed since approval ({what})",
+                    item.locate("description" if what == "description" else kind.pointer),
+                    server=name,
+                    field=what,
+                    evidence=evidence or None,
+                    **subject,
+                )
+        for key in sorted(set(approved) - set(current)):
+            if update:
+                del approved[key]
+                outcome.approved_changes += 1
+                outcome.dirty = True
+            else:
+                report(
+                    "MCPS409",
+                    f"Approved {kind.label} {key!r} is no longer exposed",
+                    inv.locate(),
+                    server=name,
+                    **{kind.subject: key},
+                )
+
+
 def check_pins(
     store: PinStore,
     servers: Iterable[ServerConfig],
@@ -225,11 +445,11 @@ def check_pins(
     frozen: bool = False,
     now: str | None = None,
 ) -> PinOutcome:
-    """Compare the current servers and tools with ``store`` and report changes.
+    """Compare the current servers, tools, prompts and resources with ``store``.
 
-    Unless ``frozen``, new servers and tools are pinned in ``store`` (in memory;
-    the caller saves it when ``outcome.dirty`` is set). ``update`` approves every
-    change.
+    Unless ``frozen``, new servers and definitions are pinned in ``store`` (in
+    memory; the caller saves it when ``outcome.dirty`` is set). ``update``
+    approves every change.
     """
     now = now or _now()
     mode = "update" if update else "frozen" if frozen else "tofu"
@@ -253,7 +473,7 @@ def check_pins(
         first_time = entry is None
         if entry is None:
             if frozen:
-                count = f" with {len(inv.tools)} tool(s)" if inv else ""
+                count = f" with {_inventory_summary(inv)}" if inv else ""
                 report(
                     "MCPS402",
                     f"Server {name!r}{count} is not in the approved pin set",
@@ -306,6 +526,7 @@ def check_pins(
 
         if inv is None:
             continue
+        _check_items(entry, inv, outcome, report, now=now, update=update, frozen=frozen)
         tools_entry = entry.get("tools")
         instructions = inv.instructions or ""
         if tools_entry is None:
