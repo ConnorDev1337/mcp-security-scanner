@@ -732,11 +732,16 @@ def check_prompt_resource_references(inventories: list[ServerInventory]) -> Iter
             key = resource_key(resource)
             fields = list(resource_text_fields(resource))
             items.append((f"{resource.kind} {key!r}", resource.locate, {"resource": key}, fields))
+        own = _own_names(inv) if items else set()
         for label, locate, subject, fields in items:
             texts = [f for f in fields if f.kind != "name"]
+            joined = " ".join(f.text for f in texts)
             for name, servers, pattern in candidates:
                 foreign = sorted(servers - {inv.server})
-                hit = next((f for f in texts if pattern.search(f.text)), None) if foreign else None
+                # Same exemptions and substring pre-filter as check_cross_server.
+                if not foreign or name in own or name not in joined:
+                    continue
+                hit = next((f for f in texts if pattern.search(f.text)), None)
                 if hit is None:
                     continue
                 yield Finding(
