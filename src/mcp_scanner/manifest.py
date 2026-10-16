@@ -1,0 +1,151 @@
+"""Load tool definitions captured from MCP servers (offline, no execution).
+
+Accepted shapes:
+
+* scanner dump / multi-server manifest::
+
+      {"servers": {"<name>": {"instructions": "...", "tools": [...]}}}
+
+* a ``tools/list`` result: ``{"tools": [...]}``
+* a full JSON-RPC response: ``{"jsonrpc": "2.0", "id": 1, "result": {"tools": [...]}}``
+* a bare JSON array of tools.
+
+Single-server shapes take their server name from ``NAME=FILE`` on the command
+line, then from a top-level ``"server"``/``serverInfo.name`` key, then from the
+file stem.
+"""
+
+from __future__ import annotations
+
+import datetime as _dt
+import json
+import tomllib
+from pathlib import Path
+from typing import Any
+
+from . import TOOL_NAME, __version__
+from .jsonloc import JSONLocError, SourceDocument, load_document
+from .models import Notice, ServerInventory, ToolDefinition, join_pointer
+
+
+class ManifestError(Exception):
+    pass
+
+
+def parse_spec(spec: str) -> tuple[str | None, Path]:
+    """Split ``NAME=FILE`` (the name is optional)."""
+    if "=" in spec and not Path(spec).exists():
+        name, _, path = spec.partition("=")
+        if name and path:
+            return name, Path(path)
+    return None, Path(spec)
+
+
+def _tools_from(
+    items: Any, doc: SourceDocument, pointer: str, server: str, notices: list[Notice]
+) -> list[ToolDefinition]:
+    tools: list[ToolDefinition] = []
+    if not isinstance(items, list):
+        notices.append(Notice("warning", f"'tools' for server {server!r} is not a list", doc.path))
+        return tools
+    for index, item in enumerate(items):
+        if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+            notices.append(
+                Notice(
+                    "warning", f"tool #{index} of server {server!r} has no name; skipped", doc.path
+                )
+            )
+            continue
+        tools.append(
+            ToolDefinition(item["name"], item, source=doc, pointer=join_pointer(pointer, index))
+        )
+    return tools
+
+
+def _inventory(
+    server: str, entry: dict[str, Any], doc: SourceDocument, pointer: str, notices: list[Notice]
+) -> ServerInventory:
+    instructions = entry.get("instructions")
+    server_info = entry.get("serverInfo")
+    return ServerInventory(
+        server=server,
+        tools=_tools_from(
+            entry.get("tools", []), doc, join_pointer(pointer, "tools"), server, notices
+        ),
+        instructions=instructions if isinstance(instructions, str) else None,
+        server_info=server_info if isinstance(server_info, dict) else {},
+        origin="manifest",
+        source=doc,
+        pointer=pointer,
+    )
+
+
+def inventories_from_document(
+    doc: SourceDocument, server_name: str | None = None
+) -> tuple[list[ServerInventory], list[Notice]]:
+    data = doc.data
+    notices: list[Notice] = []
+    fallback_name = server_name or Path(doc.path).stem
+
+    if isinstance(data, dict) and isinstance(data.get("servers"), dict):
+        inventories = []
+        for name, entry in data["servers"].items():
+            if isinstance(entry, list):
+                entry = {"tools": entry}
+            if not isinstance(entry, dict):
+                notices.append(
+                    Notice("warning", f"server {name!r} entry is not an object", doc.path)
+                )
+                continue
+            inventories.append(
+                _inventory(str(name), entry, doc, join_pointer("/servers", name), notices)
+            )
+        return inventories, notices
+
+    if isinstance(data, list):
+        tools = _tools_from(data, doc, "", fallback_name, notices)
+        return [ServerInventory(fallback_name, tools, source=doc, pointer="")], notices
+
+    if isinstance(data, dict):
+        entry, pointer = data, ""
+        if isinstance(data.get("result"), dict) and "tools" in data["result"]:
+            entry, pointer = data["result"], "/result"
+        if "tools" in entry:
+            info = entry.get("serverInfo") if isinstance(entry.get("serverInfo"), dict) else {}
+            name = server_name or data.get("server") or info.get("name") or fallback_name
+            return [_inventory(str(name), entry, doc, pointer, notices)], notices
+
+    raise ManifestError("unrecognised tool manifest (expected 'servers', 'tools' or a list)")
+
+
+def load_manifest(spec: str) -> tuple[list[ServerInventory], list[Notice]]:
+    name, path = parse_spec(spec)
+    try:
+        doc = load_document(path)
+    except FileNotFoundError:
+        return [], [Notice("error", "tool manifest not found", str(path))]
+    except (OSError, UnicodeDecodeError, ValueError, JSONLocError, tomllib.TOMLDecodeError) as exc:
+        return [], [Notice("error", f"cannot parse tool manifest: {exc}", str(path))]
+    try:
+        return inventories_from_document(doc, name)
+    except ManifestError as exc:
+        return [], [Notice("error", str(exc), str(path))]
+
+
+def dump_inventories(inventories: list[ServerInventory], path: str | Path) -> None:
+    """Write inventories in the multi-server manifest format (re-loadable)."""
+    payload = {
+        "generator": f"{TOOL_NAME}/{__version__}",
+        "generated_at": _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds"),
+        "servers": {
+            inv.server: {
+                **({"serverInfo": inv.server_info} if inv.server_info else {}),
+                **({"instructions": inv.instructions} if inv.instructions is not None else {}),
+                "tools": [tool.raw for tool in inv.tools],
+            }
+            for inv in inventories
+        },
+    }
+    Path(path).write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )

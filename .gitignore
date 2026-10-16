@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Local scanner state and reports
+.mcp-scanner/
+mcp-pins.json
+*.sarif
+report.json
+tools-dump.json
