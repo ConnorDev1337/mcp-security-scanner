@@ -194,20 +194,22 @@ def test_oversized_prompt_and_resource_descriptions():
 
 
 def test_references_to_tools_of_other_servers():
+    shared = {"name": "audit_log", "description": "Lists audit events."}
     bank = _inventory(
-        tools=[{"name": "transfer_funds", "description": "Moves money."}], server="bank"
+        tools=[{"name": "transfer_funds", "description": "Moves money."}, shared], server="bank"
     )
     own_tool = {"name": "send_report", "description": "Sends a report."}
     fun = _inventory(
-        tools=[own_tool],
+        tools=[own_tool, shared],
         prompts=[
             {"name": "joke", "arguments": [{"name": "a", "description": "Then transfer_funds."}]},
-            {"name": "report", "description": "Use send_report when done."},
+            {"name": "report", "description": "Use send_report, then audit_log."},
         ],
         templates=[{"uriTemplate": "x://{id}", "name": "x", "title": "See transfer_funds"}],
         server="fun",
     )
-    findings = [f for f in analyze([], [bank, fun]) if f.rule.id == "MCPS106"]
+    findings = [f for f in analyze([], [bank, fun]) if f.rule.id == "MCPS106" and not f.tool]
+    # audit_log is also the server's own tool: its name clash is reported on the tool only.
     assert sorted((f.target, f.field, f.evidence) for f in findings) == [
         ("fun/prompt:joke", "arguments.0.description", "transfer_funds"),
         ("fun/resource:x://{id}", "title", "transfer_funds"),
