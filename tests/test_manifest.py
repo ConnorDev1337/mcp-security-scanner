@@ -56,3 +56,88 @@ def test_dump_roundtrip(write_json, tmp_path):
     assert data["servers"]["math"]["tools"] == [TOOL]
     again, _ = load_manifest(str(out))
     assert again[0].tools[0].raw == TOOL
+
+
+PROMPT = {
+    "name": "code_review",
+    "title": "Request Code Review",
+    "description": "Asks the LLM to analyze code quality",
+    "arguments": [{"name": "code", "description": "The code to review", "required": True}],
+}
+RESOURCE = {"uri": "file:///project/src/main.rs", "name": "main.rs", "mimeType": "text/x-rust"}
+TEMPLATE = {"uriTemplate": "file:///project/{path}", "name": "Project Files"}
+
+
+def test_prompts_and_resources_are_loaded_with_locations(write_json):
+    entry = {
+        "tools": [TOOL],
+        "prompts": [PROMPT, {"description": "no name"}],
+        "resources": [RESOURCE, {"name": "no uri"}],
+        "resourceTemplates": [TEMPLATE],
+    }
+    path = write_json("tools.json", {"servers": {"srv": entry}})
+    (inv,), notices = load_manifest(str(path))
+    assert [p.name for p in inv.prompts] == ["code_review"]
+    assert [r.uri for r in inv.resources] == ["file:///project/src/main.rs"]
+    assert [(t.uri, t.template, t.kind) for t in inv.resource_templates] == [
+        ("file:///project/{path}", True, "resource template")
+    ]
+    assert inv.all_resources() == [*inv.resources, *inv.resource_templates]
+    assert inv.prompts[0].pointer == "/servers/srv/prompts/0"
+    assert inv.prompts[0].arguments == PROMPT["arguments"]
+    assert inv.prompts[0].locate("arguments", 0, "description").line is not None
+    assert inv.resource_templates[0].locate("uriTemplate").pointer == (
+        "/servers/srv/resourceTemplates/0/uriTemplate"
+    )
+    messages = sorted(n.message for n in notices)
+    assert messages == [
+        "prompt #1 of server 'srv' has no name; skipped",
+        "resource #1 of server 'srv' has no uri; skipped",
+    ]
+
+
+def test_missing_keys_mean_not_collected(write_json):
+    path = write_json(
+        "tools.json", {"servers": {"old": {"tools": [TOOL]}, "new": {"prompts": []}}}
+    )
+    old, new = load_manifest(str(path))[0]
+    assert old.prompts is None and old.resources is None and old.resource_templates is None
+    assert old.all_resources() == []
+    assert new.prompts == [] and new.tools == []
+
+
+def test_single_server_shapes_accept_prompts_and_resources(write_json):
+    rpc = write_json(
+        "rpc.json",
+        {"jsonrpc": "2.0", "id": 1, "result": {"tools": [TOOL], "prompts": [PROMPT]}},
+    )
+    (inv,), _ = load_manifest(f"srv={rpc}")
+    assert inv.prompts[0].pointer == "/result/prompts/0"
+    assert inv.resources is None
+
+
+def test_malformed_feature_lists_are_reported(write_json):
+    entry = {"tools": [], "prompts": {"x": 1}, "resources": "nope", "resourceTemplates": [1]}
+    (inv,), notices = load_manifest(str(write_json("t.json", {"servers": {"s": entry}})))
+    assert inv.prompts is None and inv.resources is None and inv.resource_templates == []
+    assert len(notices) == 3
+
+
+def test_dump_roundtrip_keeps_prompts_resources_and_uncollected_kinds(write_json, tmp_path):
+    full = {
+        "tools": [TOOL],
+        "prompts": [PROMPT],
+        "resources": [RESOURCE],
+        "resourceTemplates": [TEMPLATE],
+    }
+    path = write_json("tools.json", {"servers": {"full": full, "legacy": {"tools": [TOOL]}}})
+    inventories, _ = load_manifest(str(path))
+    out = tmp_path / "dump.json"
+    dump_inventories(inventories, out)
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert data["servers"]["full"] == full
+    assert data["servers"]["legacy"] == {"tools": [TOOL]}
+    again = {inv.server: inv for inv in load_manifest(str(out))[0]}
+    assert again["full"].prompts[0].raw == PROMPT
+    assert again["full"].resource_templates[0].raw == TEMPLATE
+    assert again["legacy"].prompts is None
