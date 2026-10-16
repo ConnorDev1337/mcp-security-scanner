@@ -47,11 +47,17 @@ class _Pattern:
     regex: re.Pattern[str]
     severity: Severity | None = None
     raw: bool = False  # Match the text before normalization (hidden characters stripped).
+    unless: re.Pattern[str] | None = None  # Discard matches whose sentence matches this.
 
 
-def _n(rule_id: str, pattern: str, severity: Severity | None = None) -> _Pattern:
+def _n(
+    rule_id: str,
+    pattern: str,
+    severity: Severity | None = None,
+    unless: re.Pattern[str] | None = None,
+) -> _Pattern:
     """Build a pattern matched against the normalized (lowercase) text."""
-    return _Pattern(rule_id, re.compile(pattern), severity)
+    return _Pattern(rule_id, re.compile(pattern), severity, unless=unless)
 
 
 def _r(rule_id: str, pattern: str, severity: Severity | None = None) -> _Pattern:
@@ -72,6 +78,10 @@ _SECRETS = (
     r"session[\s_\-]?(?:cookies?|tokens?)|"
     r"cookies|\.env(?:\s+files?)?|environment\s+variables?)"
 )
+# A boolean option ("Whether Grafana should forward credentials such as cookies")
+# describes what the server does, not what the model should do. Sentences with a
+# clause break or addressed to "you" are not exempt.
+_OPTION_SENTENCE = re.compile(r"^whether\b(?!\s+or\s+not\b)(?!.*\byou)[^,;:]*$")
 
 PATTERNS: tuple[_Pattern, ...] = (
     # MCPS101 prompt-injection markup
@@ -182,6 +192,7 @@ PATTERNS: tuple[_Pattern, ...] = (
         rf"{_NOT}\b(?:read|send|include|pass|forward|upload|provide|append|attach|copy|extract|"
         rf"collect|leak|post|share|output|print|dump)\b[^.!?]{{0,50}}?\b{_SECRETS}\b",
         Severity.MEDIUM,
+        unless=_OPTION_SENTENCE,
     ),
     # MCPS105 exfiltration
     _n(
@@ -321,6 +332,13 @@ def _decode_base64(blob: str) -> str | None:
     return text if len(text) >= 8 and printable / len(text) >= 0.9 else None
 
 
+def _sentence(text: str, start: int, end: int) -> str:
+    """Return the sentence of ``text`` that contains ``text[start:end]``."""
+    lo = max(text.rfind(mark, 0, start) for mark in ".!?") + 1
+    ends = [i for i in (text.find(mark, end) for mark in ".!?") if i >= 0]
+    return text[lo : min(ends, default=len(text))].strip()
+
+
 def scan_text(text: str, kind: str, _depth: int = 0) -> list[TextHit]:
     """Run the keyword and structure rules on ``text``.
 
@@ -344,7 +362,12 @@ def scan_text(text: str, kind: str, _depth: int = 0) -> list[TextHit]:
         if kind == "instructions" and pattern.rule_id == "MCPS108":
             continue  # Server instructions legitimately address the model.
         subject = stripped if pattern.raw else normalized
-        matches = list(pattern.regex.finditer(subject))
+        matches = [
+            match
+            for match in pattern.regex.finditer(subject)
+            if pattern.unless is None
+            or not pattern.unless.search(_sentence(subject, match.start(), match.end()))
+        ]
         if matches:
             first = matches[0]
             add(
@@ -524,6 +547,20 @@ def _distinctive(name: str) -> bool:
     return len(name) >= 5 and bool(re.search(r"[_\-.]|[a-z][A-Z]", name))
 
 
+def _own_names(inv: ServerInventory) -> set[str]:
+    """Return the names a server defines itself: its tool names and enum/const values.
+
+    Servers that multiplex operations through one tool (``"method": "create_project"``)
+    mention those operations by name; that is not a reference to another server's tool.
+    """
+    names = {tool.name for tool in inv.tools}
+    for tool in inv.tools:
+        for field in tool_text_fields(tool):
+            if field.kind == "value" and (field.parts[-1] == "const" or field.parts[-2] == "enum"):
+                names.add(field.text)
+    return names
+
+
 def check_cross_server(inventories: list[ServerInventory]) -> Iterator[Finding]:
     """Report tool names shared by several servers and references to other servers' tools."""
     owners: dict[str, list[str]] = defaultdict(list)
@@ -549,6 +586,9 @@ def check_cross_server(inventories: list[ServerInventory]) -> Iterator[Finding]:
 
     candidates = {name: servers for name, servers in owners.items() if _distinctive(name)}
     for inv in inventories:
+        # Names the server defines itself are its own vocabulary (tool-name clashes are
+        # reported above).
+        own = _own_names(inv)
         texts: list[tuple[ToolDefinition | None, str]] = [
             (tool, " ".join(f.text for f in tool_text_fields(tool) if f.kind != "name"))
             for tool in inv.tools
@@ -558,7 +598,7 @@ def check_cross_server(inventories: list[ServerInventory]) -> Iterator[Finding]:
         for tool, text in texts:
             for name, servers in candidates.items():
                 foreign = [s for s in servers if s != inv.server]
-                if not foreign or (tool is not None and name == tool.name):
+                if not foreign or name in own:
                     continue
                 if re.search(rf"(?<![\w\-]){re.escape(name)}(?![\w\-])", text):
                     where = f"tool {tool.name!r}" if tool else "server instructions"
