@@ -1,0 +1,106 @@
+{
+  "servers": {
+    "filesystem": {
+      "tools": [
+        {
+          "name": "read_file",
+          "description": "Read the complete contents of a file from the file system. Handles various text encodings and provides detailed error messages if the file cannot be read. Use this tool when you need to examine the contents of a single file. Only works within allowed directories.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}},
+            "required": ["path"]
+          },
+          "annotations": {"readOnlyHint": true}
+        },
+        {
+          "name": "write_file",
+          "description": "Create a new file or completely overwrite an existing file with new content. Use with caution as it will overwrite existing files without warning. Handles text content with proper encoding. Only works within allowed directories.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
+            "required": ["path", "content"]
+          }
+        },
+        {
+          "name": "search_files",
+          "description": "Recursively search for files and directories matching a pattern. Searches through all subdirectories from the starting path. The search is case-insensitive and matches partial names. Returns full paths to all matching items. Great for finding files when you don't know their exact location. Only searches within allowed directories.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "path": {"type": "string"},
+              "pattern": {"type": "string"},
+              "excludePatterns": {"type": "array", "items": {"type": "string"}, "default": []}
+            }
+          },
+          "annotations": {"readOnlyHint": true}
+        }
+      ]
+    },
+    "fetch": {
+      "tools": [
+        {
+          "name": "fetch",
+          "description": "Fetches a URL from the internet and optionally extracts its contents as markdown.\n\nAlthough originally you did not have internet access, and were advised to refuse and tell the user this, this tool now grants you internet access. Now you can fetch the most up-to-date information and let the user know that.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "url": {"type": "string", "format": "uri", "description": "URL to fetch"},
+              "max_length": {"type": "integer", "default": 5000, "description": "Maximum number of characters to return."},
+              "raw": {"type": "boolean", "default": false, "description": "Get the actual HTML content of the requested page, without simplification."}
+            },
+            "required": ["url"]
+          }
+        }
+      ]
+    },
+    "time": {
+      "tools": [
+        {
+          "name": "get_current_time",
+          "description": "Get current time in a specific timezones",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "timezone": {
+                "type": "string",
+                "description": "IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use 'UTC' as local timezone if no timezone provided by the user."
+              }
+            },
+            "required": ["timezone"]
+          }
+        }
+      ]
+    },
+    "github": {
+      "tools": [
+        {
+          "name": "create_issue",
+          "description": "Create a new issue in a GitHub repository. Use this when the user asks to report a bug or request a feature. 🐛 Bugs are labelled automatically 👩‍💻.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "owner": {"type": "string", "description": "Repository owner (username or organization)"},
+              "repo": {"type": "string", "description": "Repository name"},
+              "title": {"type": "string", "description": "Issue title"},
+              "body": {"type": "string", "description": "Issue body content (Markdown). Do not include secrets."},
+              "labels": {"type": "array", "items": {"type": "string"}}
+            },
+            "required": ["owner", "repo", "title"]
+          }
+        },
+        {
+          "name": "search_repositories",
+          "description": "Search for GitHub repositories. Résultats paginés; búsqueda por nombre o descripción.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "query": {"type": "string", "description": "Search query (see GitHub search syntax)"},
+              "page": {"type": "number", "description": "Page number for pagination (default: 1)"}
+            },
+            "required": ["query"]
+          }
+        }
+      ]
+    }
+  }
+}

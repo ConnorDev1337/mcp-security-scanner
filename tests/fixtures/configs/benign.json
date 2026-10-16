@@ -1,0 +1,35 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem@2025.7.1", "/home/alice/projects/app"]
+    },
+    "git": {
+      "command": "uvx",
+      "args": ["mcp-server-git==2025.1.14", "--repository", "/home/alice/projects/app"]
+    },
+    "github": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      ],
+      "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"}
+    },
+    "remote": {
+      "type": "http",
+      "url": "https://mcp.example.com/mcp",
+      "headers": {"Authorization": "Bearer ${MCP_TOKEN}"}
+    },
+    "local-dev": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp"
+    },
+    "windows-wrapper": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@acme/mcp-server@1.4.2"],
+      "env": {"LOG_LEVEL": "debug", "MAX_TOKEN_LIMIT": "4000", "API_KEY": "your-api-key-here"}
+    }
+  }
+}
