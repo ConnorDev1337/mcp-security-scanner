@@ -1,0 +1,43 @@
+# Template: copy to .github/workflows/mcp-scan.yml in the repository that
+# holds your MCP configuration. Replace OWNER and COMMIT_SHA, and adjust the
+# config paths. mcp-tools.json and mcp-pins.json are produced locally (see the
+# README, "Fijado por hash") and committed after review.
+name: MCP security scan
+
+on:
+  push:
+    paths: [".mcp.json", ".vscode/mcp.json", ".cursor/mcp.json", "mcp-tools.json", "mcp-pins.json"]
+  pull_request:
+    paths: [".mcp.json", ".vscode/mcp.json", ".cursor/mcp.json", "mcp-tools.json", "mcp-pins.json"]
+
+permissions:
+  contents: read
+
+jobs:
+  mcp-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+      - name: Install scanner (pinned to a reviewed commit)
+        run: pip install "mcp-security-scanner @ git+https://github.com/OWNER/mcp-security-scanner@COMMIT_SHA"
+      - name: Scan MCP configuration
+        run: >
+          mcp-scanner scan .mcp.json
+          --tools mcp-tools.json
+          --pins mcp-pins.json --frozen-pins
+          --sarif mcp-scanner.sarif
+          --fail-on high
+      - name: Upload SARIF to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@51f77329afa6477de8c49fc9c7046c15b9a4e79d # v3.29.5
+        with:
+          sarif_file: mcp-scanner.sarif
+          category: mcp-security-scanner
