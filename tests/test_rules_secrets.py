@@ -131,7 +131,7 @@ def test_headers_and_urls():
         )
     )
     assert findings["MCPS302"][0].field == "headers.Authorization"
-    assert "api_key=Hk29****" in findings["MCPS303"][0].message
+    assert "api_key=Hk29****" in findings["MCPS303"][0].evidence
     assert "MCPS303" not in _by_rule(_server(transport="http", url="https://user@example.com/"))
     assert analyze([_server(transport="http", headers={"Authorization": "Bearer ${TOKEN}"})]) == []
 

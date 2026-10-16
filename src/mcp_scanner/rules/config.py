@@ -574,7 +574,7 @@ def _check_container(server: ServerConfig, launch: Launch) -> Iterator[Finding]:
     for option, value in parsed[0]:
         problem: tuple[str, Severity] | None = None
         if option == "--privileged" and value in (None, "true"):
-            problem = "runs a --privileged container", Severity.HIGH
+            problem = "runs with --privileged", Severity.HIGH
         elif option in {"--pid", "--network", "--net", "--ipc", "--uts", "--userns", "--cgroupns"}:
             if value == "host":
                 problem = f"shares the host {option.lstrip('-')} namespace", Severity.HIGH

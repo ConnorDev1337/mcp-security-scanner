@@ -157,6 +157,48 @@ def url_credentials(url: str) -> list[str]:
     return problems
 
 
+def _mask_url(match: re.Match[str]) -> str:
+    url = match.group()
+    try:
+        parts = urlsplit(url)
+        password = parts.password
+    except ValueError:
+        return url
+    if password and not is_reference(password):
+        url = url.replace(f":{password}@", ":****@", 1)
+    for key, value in parse_qsl(parts.query):
+        if _SENSITIVE_PARAM.match(key) and value and not is_reference(value):
+            url = url.replace(f"{key}={value}", f"{key}=****", 1)
+    return url
+
+
+def mask(text: str) -> str:
+    """Mask provider tokens and URL credentials inside arbitrary text."""
+    for _, secret in find_known_secrets(text):
+        text = text.replace(secret, redact(secret))
+    return _URL.sub(_mask_url, text)
+
+
+def mask_args(args: list[str]) -> list[str]:
+    """Copy of a command line that is safe to put in reports."""
+    masked: list[str] = []
+    for index, arg in enumerate(args):
+        if arg.startswith("-") and "=" in arg:
+            flag, _, value = arg.partition("=")
+            if _CRED_FLAG.match(flag) and value and not is_reference(value):
+                masked.append(f"{flag}={redact(value)}")
+                continue
+        elif index > 0 and _CRED_FLAG.match(args[index - 1]) and not is_reference(arg):
+            masked.append(redact(arg))
+            continue
+        assignment = _ENV_ASSIGNMENT.match(arg)
+        if assignment and _sensitive_key(assignment.group(1)) and not is_reference(arg):
+            masked.append(f"{assignment.group(1)}={redact(assignment.group(2))}")
+            continue
+        masked.append(mask(arg))
+    return masked
+
+
 def _sensitive_key(key: str) -> bool:
     return bool(_SENSITIVE_KEY.search(key)) and not _NOT_SECRET_KEY.search(key)
 
@@ -189,7 +231,7 @@ def _value_findings(
         for problem in url_credentials(url):
             yield Finding(
                 get("MCPS303"),
-                f"Credentials embedded in URL in {what}: {problem}",
+                f"Credentials embedded in URL in {what}",
                 location,
                 server=server.name,
                 field=field,
