@@ -92,7 +92,7 @@ def test_schema_and_other_changes_are_distinguished(tmp_path):
 def test_invisible_change_still_changes_hash(tmp_path):
     path = tmp_path / "pins.json"
     _run(path, inventories=[_inv(TOOL)])
-    sneaky = {**TOOL, "description": TOOL["description"] + "​"}
+    sneaky = {**TOOL, "description": TOOL["description"] + "\u200b"}
     (finding,) = _run(path, inventories=[_inv(sneaky)]).findings
     assert finding.rule.id == "MCPS401"
     assert "\\u200b" in finding.evidence

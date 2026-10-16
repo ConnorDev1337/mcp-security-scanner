@@ -59,7 +59,7 @@ def test_reports_errors_with_position(text):
 
 
 def test_strips_bom():
-    doc = from_text("bom.json", '﻿{"a": 1}')
+    doc = from_text("bom.json", '\ufeff{"a": 1}')
     assert doc.data == {"a": 1}
 
 

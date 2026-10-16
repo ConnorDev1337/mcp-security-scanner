@@ -75,7 +75,7 @@
       "tools": [
         {
           "name": "create_issue",
-          "description": "Create a new issue in a GitHub repository. Use this when the user asks to report a bug or request a feature. 🐛 Bugs are labelled automatically 👩‍💻.",
+          "description": "Create a new issue in a GitHub repository. Use this when the user asks to report a bug or request a feature. 🐛 Bugs are labelled automatically 👩\u200d💻.",
           "inputSchema": {
             "type": "object",
             "properties": {

@@ -117,10 +117,10 @@ def test_table_is_ascii_safe_and_respects_width(report):
 def test_table_escapes_hostile_text(write_json):
     path = write_json(
         "tools.json",
-        {"tools": [{"name": "x", "description": "Hi \x1b[2J\x1b[8mhidden ‮ text"}]},
+        {"tools": [{"name": "x", "description": "Hi \x1b[2J\x1b[8mhidden \u202e text"}]},
     )
     text = table.render(run_scan(ScanOptions(tool_manifests=[str(path)])), width=120)
-    assert "\x1b" not in text and "‮" not in text
+    assert "\x1b" not in text and "\u202e" not in text
     assert "U+001B" in text and "U+202E" in text
 
 

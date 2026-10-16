@@ -226,7 +226,7 @@ class SourceDocument:
 
 
 def from_text(path: str, text: str, *, toml: bool = False) -> SourceDocument:
-    if text.startswith("﻿"):
+    if text.startswith("\ufeff"):
         text = text[1:]
     if toml:
         return SourceDocument(path, text, tomllib.loads(text))
