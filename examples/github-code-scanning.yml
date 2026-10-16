@@ -1,7 +1,7 @@
 # Template: copy to .github/workflows/mcp-scan.yml in the repository that
 # holds your MCP configuration. Replace OWNER and COMMIT_SHA, and adjust the
 # config paths. mcp-tools.json and mcp-pins.json are produced locally (see the
-# README, "Fijado por hash") and committed after review.
+# README, "Hash pinning") and committed after review.
 name: MCP security scan
 
 on:
