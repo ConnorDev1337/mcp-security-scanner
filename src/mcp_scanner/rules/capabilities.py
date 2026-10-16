@@ -79,6 +79,35 @@ FINANCIAL_WORDS = frozenset(
         "trade",
     }
 )
+# Words with a common harmless meaning ("git checkout", transferring an issue,
+# drag and drop). When the description is known, they count only if the name or
+# description confirms the risky meaning.
+AMBIGUOUS_FINANCIAL_WORDS = frozenset({"transfer", "charge", "checkout"})
+AMBIGUOUS_DESTRUCTIVE_WORDS = frozenset({"drop"})
+_MONEY_CONTEXT = re.compile(
+    r"\b(?:money|funds?|payments?|paid|amounts?|currenc(?:y|ies)|prices?|pricing|invoices?|"
+    r"billing|cards?|wallets?|balances?|bank|iban|crypto|stripe|paypal|cart|orders?|"
+    r"transactions?|stocks?|shares|usd|eur)\b|[$€£]\s?\d"
+)
+_DRAG_AND_DROP = re.compile(r"\bdrag(?:s|ged|ging)?\b|\bonto\b")
+# A leading read verb turns later write words into objects ("get_commit").
+READ_VERBS = frozenset(
+    {
+        "get",
+        "list",
+        "read",
+        "search",
+        "fetch",
+        "find",
+        "view",
+        "show",
+        "describe",
+        "query",
+        "inspect",
+        "lookup",
+        "count",
+    }
+)
 WRITE_WORDS = frozenset(
     {
         "write",
@@ -140,8 +169,12 @@ _LABELS = {
 }
 
 
-def classify_name(name: str) -> str | None:
-    """Return ``"exec"``, ``"destructive"``, ``"financial"`` or None for a tool name."""
+def classify_name(name: str, description: str | None = None) -> str | None:
+    """Return ``"exec"``, ``"destructive"``, ``"financial"`` or None for a tool name.
+
+    Ambiguous words are judged by the name and ``description``; without a
+    description (e.g. a name in an auto-approve list) they are assumed risky.
+    """
     words = set(word_parts(name))
     if (
         words & EXEC_WORDS
@@ -149,16 +182,34 @@ def classify_name(name: str) -> str | None:
         or {"system", "command"} <= words
     ):
         return "exec"
-    if words & DESTRUCTIVE_WORDS:
+    context = None
+    if description is not None:
+        context = normalize_for_matching(f"{' '.join(sorted(words))} {description}")
+    destructive = words & DESTRUCTIVE_WORDS
+    if destructive - AMBIGUOUS_DESTRUCTIVE_WORDS or (
+        destructive and (context is None or not _DRAG_AND_DROP.search(context))
+    ):
         return "destructive"
-    if words & FINANCIAL_WORDS:
+    financial = words & FINANCIAL_WORDS
+    if financial - AMBIGUOUS_FINANCIAL_WORDS or (
+        financial and (context is None or _MONEY_CONTEXT.search(context))
+    ):
         return "financial"
     return None
 
 
+def _declares_write(name: str) -> bool:
+    """Return whether the action of a tool name is a write ("get_commit" is a read)."""
+    words = word_parts(name)
+    if {"and", "or", "then"} & set(words):  # "get_or_create": any write counts.
+        return bool(set(words) & WRITE_WORDS)
+    action = next((w for w in words if w in READ_VERBS or w in WRITE_WORDS), None)
+    return action in WRITE_WORDS
+
+
 def classify_tool(tool: ToolDefinition) -> tuple[str, str] | None:
     """Return ``(capability, reason)`` judged from the name, then the description, or None."""
-    by_name = classify_name(tool.name)
+    by_name = classify_name(tool.name, tool.description)
     if by_name:
         return by_name, f"name {tool.name!r}"
     if _EXEC_DESCRIPTION.search(normalize_for_matching(tool.description)):
@@ -182,10 +233,9 @@ def check_tool(inv: ServerInventory, tool: ToolDefinition) -> Iterator[Finding]:
         )
 
     annotations = tool.annotations
-    words = set(word_parts(tool.name))
     if annotations.get("readOnlyHint") is True:
         modifies = capability is not None and capability[0] in {"exec", "destructive", "financial"}
-        if modifies or words & WRITE_WORDS:
+        if modifies or _declares_write(tool.name):
             yield Finding(
                 get("MCPS212"),
                 "Tool declares readOnlyHint=true but its name/description indicates it modifies "
@@ -195,7 +245,8 @@ def check_tool(inv: ServerInventory, tool: ToolDefinition) -> Iterator[Finding]:
                 tool=tool.name,
                 field="annotations.readOnlyHint",
             )
-    if annotations.get("destructiveHint") is False and classify_name(tool.name) == "destructive":
+    destructive = capability is not None and capability[0] == "destructive"
+    if annotations.get("destructiveHint") is False and destructive:
         yield Finding(
             get("MCPS212"),
             "Tool declares destructiveHint=false but its name indicates a destructive operation",
