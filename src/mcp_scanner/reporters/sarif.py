@@ -16,7 +16,7 @@ from typing import Any
 from urllib.parse import quote
 
 from .. import TOOL_NAME, __version__
-from ..models import Finding, Location, Severity
+from ..models import Finding, Location, Rule, Severity
 from ..rules.catalog import all_rules
 from ..rules.secrets import mask
 from ..scanner import ScanReport
@@ -29,6 +29,7 @@ LEVELS = {
     Severity.LOW: "note",
     Severity.INFO: "note",
 }
+# GitHub ranks security-severity >= 9.0 as critical, >= 7.0 high, >= 4.0 medium, else low.
 SECURITY_SEVERITY = {
     Severity.CRITICAL: "9.5",
     Severity.HIGH: "8.0",
@@ -40,6 +41,7 @@ NOTICE_LEVELS = {"error": "error", "warning": "warning", "note": "note"}
 
 
 def artifact_location(path: str, root: Path) -> dict[str, str]:
+    """Return a SARIF artifactLocation, relative to ``%SRCROOT%`` when under ``root``."""
     absolute = Path(os.path.abspath(path))
     try:
         relative = absolute.relative_to(os.path.abspath(root))
@@ -60,7 +62,7 @@ def _physical(location: Location, root: Path) -> dict[str, Any] | None:
     return physical
 
 
-def _rule_descriptor(rule) -> dict[str, Any]:
+def _rule_descriptor(rule: Rule) -> dict[str, Any]:
     return {
         "id": rule.id,
         "name": rule.name,

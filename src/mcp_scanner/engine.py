@@ -14,6 +14,7 @@ def analyze(
     inventories: Iterable[ServerInventory] = (),
     documents: Iterable[SourceDocument] = (),
 ) -> list[Finding]:
+    """Run every static rule; return de-duplicated findings ordered by :func:`finalize`."""
     inventories = list(inventories)
     findings: list[Finding] = []
     for doc in documents:
@@ -32,7 +33,10 @@ def analyze(
 
 
 def finalize(findings: Iterable[Finding]) -> list[Finding]:
-    """De-duplicate (keeping the most severe) and sort most severe first."""
+    """De-duplicate findings by fingerprint, keeping the most severe, and sort them.
+
+    Findings are ordered by descending severity, then server, tool, rule and location.
+    """
     unique: dict[str, Finding] = {}
     for finding in findings:
         key = finding.fingerprint()

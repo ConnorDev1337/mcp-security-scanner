@@ -1,5 +1,8 @@
-"""Secret detection. Token-shaped values are generated at runtime so the repo
-itself never contains strings that look like real credentials."""
+"""Tests for secret detection.
+
+Token-shaped values are generated at runtime so the repository never contains
+strings that look like real credentials.
+"""
 
 import json
 import random

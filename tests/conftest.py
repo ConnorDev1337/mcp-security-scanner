@@ -10,7 +10,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 @pytest.fixture(autouse=True)
 def _isolate_pins(tmp_path, monkeypatch):
-    """Never let a test read or write the developer's real pin file."""
+    """Keep tests away from the developer's real pin file and disable colored output."""
     monkeypatch.setenv("MCP_SCANNER_PINS", str(tmp_path / "default-pins.json"))
     monkeypatch.setenv("NO_COLOR", "1")
 

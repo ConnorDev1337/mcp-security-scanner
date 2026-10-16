@@ -7,7 +7,10 @@ from pathlib import Path
 
 
 def display_path(path: str | None, root: Path | None = None) -> str:
-    """Path relative to ``root`` (POSIX separators) when possible."""
+    """Return ``path`` relative to ``root`` (default: cwd) with POSIX separators.
+
+    Paths outside ``root`` are returned unchanged and a missing path as ``-``.
+    """
     if not path:
         return "-"
     root = root or Path.cwd()

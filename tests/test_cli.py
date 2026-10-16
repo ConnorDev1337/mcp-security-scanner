@@ -91,9 +91,18 @@ def test_frozen_pins_for_ci(capsys, write_json, tmp_path):
     manifest = write_json("tools.json", {"tools": [{"name": "t", "description": "ok"}]})
     pins = tmp_path / "pins.json"
     code, out, _ = run(
-        capsys, "scan", "-t", f"srv={manifest}", "--pins", str(pins), "--frozen-pins",
-        "--fail-on", "medium", "-f", "json",
-    )  # fmt: skip
+        capsys,
+        "scan",
+        "-t",
+        f"srv={manifest}",
+        "--pins",
+        str(pins),
+        "--frozen-pins",
+        "--fail-on",
+        "medium",
+        "-f",
+        "json",
+    )
     assert code == 1 and not pins.exists()
     assert json.loads(out)["findings"][0]["rule_id"] == "MCPS402"
 
@@ -116,8 +125,15 @@ def test_conflicting_pin_flags(capsys, flags):
 
 def test_dump_tools_roundtrip(capsys, fixtures, tmp_path):
     dump = tmp_path / "dump.json"
-    run(capsys, "scan", "-t", str(fixtures / "tools" / "benign.json"), "--no-pins",
-        "--dump-tools", str(dump))  # fmt: skip
+    run(
+        capsys,
+        "scan",
+        "-t",
+        str(fixtures / "tools" / "benign.json"),
+        "--no-pins",
+        "--dump-tools",
+        str(dump),
+    )
     data = json.loads(dump.read_text(encoding="utf-8"))
     assert set(data["servers"]) == {"filesystem", "fetch", "time", "github"}
     code, _, _ = run(capsys, "scan", "-t", str(dump), "--no-pins")
@@ -173,11 +189,19 @@ def test_no_command_prints_help(capsys):
 
 def test_module_entry_point(fixtures):
     result = subprocess.run(
-        [sys.executable, "-m", "mcp_scanner", "scan", str(fixtures / "configs" / "benign.json"),
-         "--no-pins", "--color", "never"],
+        [
+            sys.executable,
+            "-m",
+            "mcp_scanner",
+            "scan",
+            str(fixtures / "configs" / "benign.json"),
+            "--no-pins",
+            "--color",
+            "never",
+        ],
         capture_output=True,
         text=True,
         check=False,
-    )  # fmt: skip
+    )
     assert result.returncode == 0, result.stderr
     assert "MCPS201" in result.stdout

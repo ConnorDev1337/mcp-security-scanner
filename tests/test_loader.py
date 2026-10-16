@@ -161,7 +161,10 @@ def test_discovery_finds_existing_files(tmp_path):
     cwd.mkdir()
     (cwd / ".mcp.json").write_text("{}")
     found = discover(home=home, cwd=cwd, environ={}, system="Linux")
-    assert [(c, p.name) for c, p in found] == [("claude-code", ".mcp.json"), ("cursor", "mcp.json")]
+    assert [(c, p.name) for c, p in found] == [
+        ("claude-code", ".mcp.json"),
+        ("cursor", "mcp.json"),
+    ]
 
 
 @pytest.mark.parametrize("system", ["Windows", "Darwin", "Linux"])

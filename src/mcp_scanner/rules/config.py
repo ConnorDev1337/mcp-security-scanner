@@ -48,14 +48,18 @@ _DOWNLOAD_EXEC = re.compile(
 
 @dataclass
 class Inline:
+    """A script passed inline to a shell or interpreter (``sh -c``, ``python -c``, ...)."""
+
     kind: str  # "shell" | "code" | "encoded"
     interpreter: str
     script: str
-    chained: bool
+    chained: bool  # True if the script cannot be reduced to a single inner command.
 
 
 @dataclass
 class Launch:
+    """The command that really runs once env/sudo/shell wrappers are peeled off."""
+
     base: str
     args: list[str]
     wrappers: list[str] = field(default_factory=list)
@@ -63,6 +67,10 @@ class Launch:
 
 
 def command_base(command: str) -> str:
+    """Return the lowercase executable name without directory or Windows extension.
+
+    Python and Node.js variants are normalized to ``python`` and ``node``.
+    """
     name = re.split(r"[\\/]", command.strip().strip("\"'"))[-1].lower()
     for ext in (".exe", ".cmd", ".bat", ".ps1", ".com"):
         if name.endswith(ext):
@@ -82,6 +90,7 @@ def _split(script: str, posix: bool) -> list[str] | None:
 
 
 def _continue(inline: Inline, wrappers: list[str], posix: bool = True) -> Launch:
+    """Analyze the command inside an inline script, unless it chains several commands."""
     tokens = None if inline.chained else _split(inline.script, posix)
     if not tokens:
         return Launch(inline.interpreter, [], wrappers, inline)
@@ -107,12 +116,17 @@ _PS_VALUE_OPTS = (
 
 
 def _ps_takes_value(option: str) -> bool:
+    """Return whether a PowerShell option consumes the next argument.
+
+    PowerShell accepts any unambiguous prefix of a parameter name.
+    """
     if option in {"-ep", "-ex", "-wd", "-w", "-v"}:
         return True
     return len(option) >= 3 and any(o.startswith(option) for o in _PS_VALUE_OPTS)
 
 
 def _decode_powershell(payload: str) -> str | None:
+    """Decode an ``-EncodedCommand`` payload (base64 of UTF-16LE); None if invalid."""
     try:
         return base64.b64decode(payload, validate=True).decode("utf-16-le")
     except (binascii.Error, ValueError, UnicodeDecodeError):
@@ -120,7 +134,7 @@ def _decode_powershell(payload: str) -> str | None:
 
 
 def analyze_launch(command: str, args: list[str]) -> Launch:
-    """Peel off env/sudo/shell wrappers to find what is really executed."""
+    """Peel off up to eight levels of env/sudo/shell wrappers to find what really runs."""
     base, rest, wrappers = command_base(command), list(args), []
     for _ in range(8):
         if base == "env":
@@ -192,6 +206,8 @@ def analyze_launch(command: str, args: list[str]) -> Launch:
 
 
 # --------------------------------------------------------------------------- package pinning
+# The *_spec helpers extract the package a runner installs; the *_unpinned helpers
+# return why that spec is not pinned to an exact version, or None.
 
 _EXACT_SEMVER = re.compile(r"^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.\-+]+)?$")
 _EXACT_PEP440 = re.compile(r"^\d+(?:\.\d+)*(?:(?:a|b|rc)\d+)?(?:\.post\d+)?(?:\.dev\d+)?$")
@@ -337,16 +353,58 @@ _DOCKER_SHORT = {
     "-m": "--memory",
 }
 _DOCKER_VALUE_OPTS = frozenset(
-    {"--env", "--volume", "--publish", "--user", "--workdir", "--hostname", "--label", "--memory",
-     "--name", "--network", "--net", "--entrypoint", "--env-file", "--mount", "--cpus",
-     "--platform", "--pull", "--cap-add", "--cap-drop", "--security-opt", "--add-host",
-     "--device", "--ipc", "--pid", "--uts", "--userns", "--cgroupns", "--restart", "--runtime",
-     "--tmpfs", "--ulimit", "--log-driver", "--log-opt", "--gpus", "--dns", "--stop-signal",
-     "--shm-size", "--group-add", "--label-file", "--expose", "--health-cmd", "--cidfile"}
-)  # fmt: skip
+    {
+        "--env",
+        "--volume",
+        "--publish",
+        "--user",
+        "--workdir",
+        "--hostname",
+        "--label",
+        "--memory",
+        "--name",
+        "--network",
+        "--net",
+        "--entrypoint",
+        "--env-file",
+        "--mount",
+        "--cpus",
+        "--platform",
+        "--pull",
+        "--cap-add",
+        "--cap-drop",
+        "--security-opt",
+        "--add-host",
+        "--device",
+        "--ipc",
+        "--pid",
+        "--uts",
+        "--userns",
+        "--cgroupns",
+        "--restart",
+        "--runtime",
+        "--tmpfs",
+        "--ulimit",
+        "--log-driver",
+        "--log-opt",
+        "--gpus",
+        "--dns",
+        "--stop-signal",
+        "--shm-size",
+        "--group-add",
+        "--label-file",
+        "--expose",
+        "--health-cmd",
+        "--cidfile",
+    }
+)
 
 
 def parse_docker_run(args: list[str]) -> tuple[list[tuple[str, str | None]], str | None] | None:
+    """Parse ``docker run`` arguments into ``(options, image)``; None for other commands.
+
+    Short options are expanded to their long names; flags without a value map to None.
+    """
     if args[:1] == ["run"]:
         rest = args[1:]
     elif args[:2] == ["container", "run"]:
@@ -378,7 +436,9 @@ def parse_docker_run(args: list[str]) -> tuple[list[tuple[str, str | None]], str
                     options.append((_DOCKER_SHORT[short], arg[2:].lstrip("=")))
                     i += 1
                 else:
-                    options.append((_DOCKER_SHORT[short], rest[i + 1] if i + 1 < len(rest) else ""))
+                    options.append(
+                        (_DOCKER_SHORT[short], rest[i + 1] if i + 1 < len(rest) else "")
+                    )
                     i += 2
             else:
                 options.append((arg, None))
@@ -386,6 +446,21 @@ def parse_docker_run(args: list[str]) -> tuple[list[tuple[str, str | None]], str
             continue
         return options, arg
     return options, None
+
+
+_HOME_ALIASES = frozenset(
+    {
+        "~",
+        "$home",
+        "${home}",
+        "%userprofile%",
+        "%homepath%",
+        "${env:home}",
+        "${env:userprofile}",
+        "${userhome}",
+        "/root",
+    }
+)
 
 
 def path_breadth(value: str) -> str | None:
@@ -397,10 +472,13 @@ def path_breadth(value: str) -> str | None:
     if norm != "/":
         norm = norm.rstrip("/")
     low = norm.lower()
-    if low == "/" or re.fullmatch(r"[a-z]:", low) or low in {"/home", "/users", "c:/users", "/mnt"}:
+    if (
+        low == "/"
+        or re.fullmatch(r"[a-z]:", low)
+        or low in {"/home", "/users", "c:/users", "/mnt"}
+    ):
         return "root"
-    if low in {"~", "$home", "${home}", "%userprofile%", "%homepath%", "${env:home}",
-               "${env:userprofile}", "${userhome}", "/root"}:  # fmt: skip
+    if low in _HOME_ALIASES:
         return "home"
     if re.fullmatch(r"/(?:home|users)/[^/]+|[a-z]:/users/[^/]+|/mnt/[a-z]/users/[^/]+", low):
         return "home"
@@ -408,14 +486,30 @@ def path_breadth(value: str) -> str | None:
 
 
 def _mount_source(option: str, value: str) -> str | None:
+    """Return the host path of a ``--volume`` or bind ``--mount`` option, if any."""
     if option == "--mount":
         fields = dict(part.split("=", 1) for part in value.split(",") if "=" in part)
         if fields.get("type", "bind") != "bind":
             return None
         return fields.get("source") or fields.get("src")
-    if re.match(r"^[A-Za-z]:[\\/]", value):
+    if re.match(r"^[A-Za-z]:[\\/]", value):  # The first colon belongs to the drive letter.
         return value[:2] + value[2:].split(":")[0]
     return value.split(":")[0]
+
+
+_SENSITIVE_HOST_PATHS = frozenset(
+    {
+        "/etc",
+        "/root",
+        "/proc",
+        "/sys",
+        "/dev",
+        "/var/run",
+        "/run",
+        "/boot",
+        "/var/lib/docker",
+    }
+)
 
 
 def _sensitive_mount(source: str) -> tuple[str, Severity] | None:
@@ -426,8 +520,7 @@ def _sensitive_mount(source: str) -> tuple[str, Severity] | None:
     if breadth:
         what = "host root filesystem" if breadth == "root" else "a home directory"
         return f"mounts {what} ({source})", Severity.HIGH
-    if low.rstrip("/") in {"/etc", "/root", "/proc", "/sys", "/dev", "/var/run", "/run", "/boot",
-                           "/var/lib/docker"}:  # fmt: skip
+    if low.rstrip("/") in _SENSITIVE_HOST_PATHS:
         return f"mounts sensitive host path {source}", Severity.HIGH
     if re.search(r"(?:^|/)\.(?:ssh|aws|kube|gnupg|docker|config/gcloud)(?:/|$)", low):
         return f"mounts a credential directory ({source})", Severity.HIGH
@@ -630,6 +723,7 @@ def _check_broad_fs(server: ServerConfig, launch: Launch) -> Iterator[Finding]:
 
 
 def is_loopback(host: str | None) -> bool:
+    """Return whether ``host`` is ``localhost``, a ``*.localhost`` name or a loopback IP."""
     if not host:
         return False
     host = host.lower().strip("[]")
@@ -642,6 +736,7 @@ def is_loopback(host: str | None) -> bool:
 
 
 def _plain_http_host(url: str) -> str | None:
+    """Return the host of a plain-HTTP URL to a non-loopback host, else None."""
     try:
         parts = urlsplit(url)
     except ValueError:
@@ -691,11 +786,22 @@ _TLS_ENV = {
 }
 _TLS_ENV_GENERIC = re.compile(r"(?i)(?:ssl|tls)[_-]?(?:verify|verification|check)")
 _TLS_FLAGS = frozenset(
-    {"--insecure", "--no-verify-ssl", "--no-check-certificate", "--ignore-certificate-errors",
-     "--allow-insecure", "--skip-tls-verify", "--tls-skip-verify", "--insecure-skip-tls-verify",
-     "--disable-ssl-verification", "--no-ssl-verify", "--ssl-no-verify", "--tls-no-verify",
-     "--trust-all-certs"}
-)  # fmt: skip
+    {
+        "--insecure",
+        "--no-verify-ssl",
+        "--no-check-certificate",
+        "--ignore-certificate-errors",
+        "--allow-insecure",
+        "--skip-tls-verify",
+        "--tls-skip-verify",
+        "--insecure-skip-tls-verify",
+        "--disable-ssl-verification",
+        "--no-ssl-verify",
+        "--ssl-no-verify",
+        "--tls-no-verify",
+        "--trust-all-certs",
+    }
+)
 
 
 def _check_tls(server: ServerConfig) -> Iterator[Finding]:
@@ -763,6 +869,7 @@ def _check_auto_approve(server: ServerConfig) -> Iterator[Finding]:
         )
 
 
+# Variable name -> None (always reported) or a pattern the value must match.
 _INJECTION_ENV = {
     "LD_PRELOAD": None,
     "LD_AUDIT": None,
@@ -823,9 +930,10 @@ def check_server(server: ServerConfig) -> Iterator[Finding]:
 
 
 def check_document(doc: SourceDocument) -> Iterator[Finding]:
+    """Report duplicate keys and global VS Code auto-approval settings."""
     for pointer in doc.duplicates:
         parent, _, key = pointer.rpartition("/")
-        key = key.replace("~1", "/").replace("~0", "~")
+        key = key.replace("~1", "/").replace("~0", "~")  # Unescape the JSON Pointer token.
         yield Finding(
             get("MCPS001"),
             f"Key {key!r} is defined more than once in {parent or '/'}; "

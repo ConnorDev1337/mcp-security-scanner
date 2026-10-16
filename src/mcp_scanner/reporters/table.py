@@ -1,4 +1,4 @@
-"""Human-readable console report (ASCII only, safe on any terminal)."""
+"""Human-readable console report: an ASCII table with all untrusted text sanitized."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ COLORS = {
     Severity.INFO: "\x1b[2m",
 }
 RESET = "\x1b[0m"
-SEV_W, RULE_W = 8, 7
+SEV_W, RULE_W = 8, 7  # Widths of the SEVERITY and RULE columns.
 
 
 def _wrap(text: str, width: int) -> list[str]:
@@ -34,6 +34,7 @@ def _wrap(text: str, width: int) -> list[str]:
 
 
 def _rule(widths: list[int]) -> str:
+    """Return a horizontal table border for the given column widths."""
     return "+" + "+".join("-" * (w + 2) for w in widths) + "+"
 
 
@@ -92,7 +93,7 @@ def render(
     if findings:
         target_w = min(28, max(len(sanitize(f.target, 200)) for f in findings))
         target_w = max(target_w, 6)
-        text_w = width - (SEV_W + RULE_W + target_w) - 13
+        text_w = width - (SEV_W + RULE_W + target_w) - 13  # 5 borders + 4 x 2 padding.
         widths = [SEV_W, RULE_W, target_w, text_w]
         lines.append(_rule(widths))
         lines.extend(_row([["SEVERITY"], ["RULE"], ["TARGET"], ["FINDING"]], widths))

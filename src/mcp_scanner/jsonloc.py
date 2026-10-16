@@ -1,15 +1,10 @@
 """Position-aware JSON/JSONC parser.
 
-The standard ``json`` module discards source positions, but console output and
-SARIF results are far more useful when they point at the exact line of a
-configuration file. This module implements a small recursive-descent parser
-that returns the decoded value together with a map from JSON Pointer to the
-offset where each member starts.
-
-It also accepts the JSONC dialect used by VS Code and Zed settings (``//`` and
-``/* */`` comments, trailing commas) and records duplicate object keys, which
-``json.loads`` silently collapses: a reviewer may read the first definition of
-a server while the client runs the last one.
+Unlike :mod:`json`, it records where each value starts (keyed by JSON Pointer)
+so findings can point at exact lines. It accepts JSONC as used by VS Code and
+Zed (comments, trailing commas) and records duplicate keys, which ``json.loads``
+silently collapses: a reviewer may read the first definition of a server while
+the client runs the last one.
 """
 
 from __future__ import annotations
@@ -33,6 +28,8 @@ _DECODER = json.JSONDecoder(strict=False)
 
 
 class JSONLocError(ValueError):
+    """Syntax error with a 1-based ``line`` and ``column``."""
+
     def __init__(self, message: str, line: int, column: int) -> None:
         super().__init__(f"{message} (line {line}, column {column})")
         self.line = line
@@ -91,6 +88,7 @@ class _Parser:
         self.skip()
         if self.pos >= self.n:
             raise self.error("unexpected end of input")
+        # Object members are already located at their key; keep that position.
         self.offsets.setdefault(pointer, self.pos)
         c = self.text[self.pos]
         if c == "{":
@@ -135,6 +133,7 @@ class _Parser:
             child = join_pointer(pointer, key)
             if key in result:
                 self.duplicates.append(child)
+                # The last definition wins: drop offsets recorded for the earlier value.
                 prefix = child + "/"
                 for stale in [p for p in self.offsets if p.startswith(prefix)]:
                     del self.offsets[stale]
@@ -149,7 +148,7 @@ class _Parser:
             if c == ",":
                 self.pos += 1
                 self.skip()
-                if self.allow_comments and self.peek() == "}":
+                if self.allow_comments and self.peek() == "}":  # JSONC trailing comma.
                     self.pos += 1
                     return result
                 continue
@@ -172,7 +171,7 @@ class _Parser:
             if c == ",":
                 self.pos += 1
                 self.skip()
-                if self.allow_comments and self.peek() == "]":
+                if self.allow_comments and self.peek() == "]":  # JSONC trailing comma.
                     self.pos += 1
                     return result
                 continue
@@ -183,7 +182,12 @@ class _Parser:
 
 
 def parse(text: str, *, allow_comments: bool = True) -> tuple[Any, dict[str, int], list[str]]:
-    """Parse JSON/JSONC text. Returns ``(value, offsets, duplicate_pointers)``."""
+    """Parse JSON or JSONC text.
+
+    Return ``(value, offsets, duplicates)``: ``offsets`` maps JSON Pointers to
+    source offsets and ``duplicates`` lists the pointers of repeated keys. Raise
+    :class:`JSONLocError` on invalid input.
+    """
     parser = _Parser(text, allow_comments)
     value = parser.value("", 0)
     parser.skip()
@@ -210,6 +214,10 @@ class SourceDocument:
         return _position(self._starts, offset)
 
     def locate(self, pointer: str, hint: str | None = None) -> Location:
+        """Return the location of ``pointer``, or of its closest recorded ancestor.
+
+        Documents without offsets (TOML) fall back to the first occurrence of ``hint``.
+        """
         current = pointer
         while current in self.offsets or current:
             if current in self.offsets:
@@ -217,7 +225,6 @@ class SourceDocument:
                 return Location(self.path, line, column, pointer)
             current = current.rsplit("/", 1)[0]
         if hint:
-            # Formats without offsets (TOML): fall back to the first mention.
             index = self.text.find(hint)
             if index >= 0:
                 line, column = self.position(index)
@@ -226,6 +233,7 @@ class SourceDocument:
 
 
 def from_text(path: str, text: str, *, toml: bool = False) -> SourceDocument:
+    """Parse ``text`` as JSONC, or as TOML if ``toml`` is true; a leading BOM is ignored."""
     if text.startswith("\ufeff"):
         text = text[1:]
     if toml:
@@ -235,10 +243,10 @@ def from_text(path: str, text: str, *, toml: bool = False) -> SourceDocument:
 
 
 def load_document(path: str | Path) -> SourceDocument:
-    """Read and parse a JSON, JSONC or TOML file.
+    """Read and parse a JSON or JSONC file, or TOML if the suffix is ``.toml``.
 
-    Raises ``OSError``, ``UnicodeDecodeError``, ``JSONLocError`` or
-    ``tomllib.TOMLDecodeError`` on failure.
+    Raise ``OSError``, ``UnicodeDecodeError``, ``ValueError`` (file too large, or
+    :class:`JSONLocError`) or ``tomllib.TOMLDecodeError`` on failure.
     """
     file_path = Path(path)
     size = file_path.stat().st_size
