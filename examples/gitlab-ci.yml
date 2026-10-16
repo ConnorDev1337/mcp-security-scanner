@@ -1,7 +1,7 @@
 # Template: add this job to the .gitlab-ci.yml of the project that holds your
 # MCP configuration. Replace COMMIT_SHA with a reviewed commit of the scanner
 # and adjust the config paths. mcp-tools.json and mcp-pins.json are produced
-# locally (see the README, "Fijado por hash") and committed after review.
+# locally (see the README, "Hash pinning") and committed after review.
 #
 # While the scanner repository is private, the consuming project must be in
 # its CI/CD job token allowlist (Settings > CI/CD > Job token permissions).
