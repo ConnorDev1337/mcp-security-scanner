@@ -598,7 +598,8 @@ def check_cross_server(inventories: list[ServerInventory]) -> Iterator[Finding]:
         for tool, text in texts:
             for name, servers in candidates.items():
                 foreign = [s for s in servers if s != inv.server]
-                if not foreign or name in own:
+                # The substring test is a cheap pre-filter: this loop is quadratic in tools.
+                if not foreign or name in own or name not in text:
                     continue
                 if re.search(rf"(?<![\w\-]){re.escape(name)}(?![\w\-])", text):
                     where = f"tool {tool.name!r}" if tool else "server instructions"
