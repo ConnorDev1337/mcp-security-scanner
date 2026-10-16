@@ -1,11 +1,12 @@
 """MCPS101-MCPS110: tool poisoning, plus the text checks of MCPS120-MCPS122 and MCPS301.
 
 Every text the model reads is scanned: tool titles and descriptions, parameter
-descriptions, defaults and enums, output schemas and server ``instructions``.
-Keyword rules match a normalized copy (hidden characters removed, NFKC,
-homoglyphs folded) so trivial obfuscation does not evade them. Payloads hidden
-in Unicode tag characters, variation selectors or base64 are decoded and
-scanned too.
+descriptions, defaults and enums, output schemas, server ``instructions``, and
+the names, titles and descriptions of prompts, prompt arguments, resources and
+resource templates. Keyword rules match a normalized copy (hidden characters
+removed, NFKC, homoglyphs folded) so trivial obfuscation does not evade them.
+Payloads hidden in Unicode tag characters, variation selectors or base64 are
+decoded and scanned too.
 """
 
 from __future__ import annotations
@@ -17,11 +18,20 @@ from collections import defaultdict
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, replace
 
-from ..models import Finding, Location, ServerInventory, Severity, ToolDefinition
+from ..models import (
+    Finding,
+    Location,
+    PromptDefinition,
+    ResourceDefinition,
+    ServerInventory,
+    Severity,
+    ToolDefinition,
+)
 from ..textutil import normalize_for_matching, redact, sanitize, snippet, strip_hidden
 from . import secrets as secret_rules
 from . import unicode as unicode_rules
 from .catalog import get
+from .resources import resource_key
 
 OVERSIZED_DESCRIPTION = 5000  # Characters (MCPS110).
 MAX_SCHEMA_DEPTH = 32
@@ -474,6 +484,9 @@ def _field_findings(
     locate: Callable[..., Location],
     server: str,
     tool: str | None,
+    *,
+    prompt: str | None = None,
+    resource: str | None = None,
 ) -> Iterator[Finding]:
     location = locate(*field.parts)
 
@@ -489,6 +502,8 @@ def _field_findings(
             field=field.path,
             evidence=evidence,
             severity=severity,
+            prompt=prompt,
+            resource=resource,
         )
 
     for issue in unicode_rules.analyze_text(field.text):
@@ -614,3 +629,124 @@ def check_cross_server(inventories: list[ServerInventory]) -> Iterator[Finding]:
                         evidence=name,
                         severity=Severity.MEDIUM,
                     )
+
+
+# --------------------------------------------------------------------------- prompts and resources
+
+
+def prompt_text_fields(prompt: PromptDefinition) -> Iterator[TextField]:
+    """Yield every text of ``prompt`` listed by ``prompts/list``, argument texts included."""
+    raw = prompt.raw
+    yield TextField(("name",), "prompt name", prompt.name, "name")
+    if isinstance(raw.get("title"), str):
+        yield TextField(("title",), "prompt title", raw["title"], "description")
+    if isinstance(raw.get("description"), str):
+        yield TextField(("description",), "prompt description", raw["description"], "description")
+    for index, argument in enumerate(prompt.arguments):
+        if not isinstance(argument, dict):
+            continue
+        name = argument.get("name")
+        where = (
+            f"prompt argument '{name}'" if isinstance(name, str) else f"prompt argument #{index}"
+        )
+        if isinstance(name, str):
+            yield TextField(("arguments", index, "name"), f"name of {where}", name, "name")
+        for key in ("title", "description"):
+            if isinstance(argument.get(key), str):
+                yield TextField(
+                    ("arguments", index, key), f"{key} of {where}", argument[key], "parameter"
+                )
+
+
+def resource_text_fields(resource: ResourceDefinition) -> Iterator[TextField]:
+    """Yield the texts of a resource or resource template, except its URI.
+
+    Resource names are display names (often file names), so they are scanned as
+    text rather than checked as identifiers. The URI is checked by
+    :mod:`.resources`.
+    """
+    raw = resource.raw
+    for key, kind in (
+        ("name", "description"),
+        ("title", "description"),
+        ("description", "description"),
+        ("mimeType", "value"),
+    ):
+        if isinstance(raw.get(key), str):
+            yield TextField((key,), f"{resource.kind} {key}", raw[key], kind)
+
+
+def _oversized(
+    what: str, description: str, locate: Callable[..., Location], **subject: str | None
+) -> Iterator[Finding]:
+    if len(description) > OVERSIZED_DESCRIPTION:
+        yield Finding(
+            get("MCPS110"),
+            f"{what} description is {len(description)} characters long",
+            locate("description"),
+            field="description",
+            **subject,
+        )
+
+
+def check_prompt(inv: ServerInventory, prompt: PromptDefinition) -> Iterator[Finding]:
+    for field in prompt_text_fields(prompt):
+        yield from _field_findings(field, prompt.locate, inv.server, None, prompt=prompt.name)
+    yield from _oversized(
+        "Prompt", prompt.description, prompt.locate, server=inv.server, prompt=prompt.name
+    )
+
+
+def check_resource(inv: ServerInventory, resource: ResourceDefinition) -> Iterator[Finding]:
+    key = resource_key(resource)
+    for field in resource_text_fields(resource):
+        yield from _field_findings(field, resource.locate, inv.server, None, resource=key)
+    yield from _oversized(
+        resource.kind.capitalize(),
+        resource.description,
+        resource.locate,
+        server=inv.server,
+        resource=key,
+    )
+
+
+def check_prompt_resource_references(inventories: list[ServerInventory]) -> Iterator[Finding]:
+    """Report prompts and resources whose metadata names a tool of another server (MCPS106)."""
+    owners: dict[str, set[str]] = defaultdict(set)
+    for inv in inventories:
+        for tool in inv.tools:
+            owners[tool.name].add(inv.server)
+    candidates = [
+        (name, servers, re.compile(rf"(?<![\w\-]){re.escape(name)}(?![\w\-])"))
+        for name, servers in owners.items()
+        if _distinctive(name)
+    ]
+    if not candidates:
+        return
+    for inv in inventories:
+        items: list[tuple[str, Callable[..., Location], dict[str, str], list[TextField]]] = [
+            (f"prompt {p.name!r}", p.locate, {"prompt": p.name}, list(prompt_text_fields(p)))
+            for p in inv.prompts or ()
+        ]
+        for resource in inv.all_resources():
+            key = resource_key(resource)
+            fields = list(resource_text_fields(resource))
+            items.append((f"{resource.kind} {key!r}", resource.locate, {"resource": key}, fields))
+        for label, locate, subject, fields in items:
+            texts = [f for f in fields if f.kind != "name"]
+            for name, servers, pattern in candidates:
+                foreign = sorted(servers - {inv.server})
+                hit = next((f for f in texts if pattern.search(f.text)), None) if foreign else None
+                if hit is None:
+                    continue
+                yield Finding(
+                    get("MCPS106"),
+                    f"Metadata of {label} references tool {name!r} of server(s) "
+                    f"{', '.join(foreign)}",
+                    locate(*hit.parts),
+                    server=inv.server,
+                    field=hit.path,
+                    evidence=name,
+                    severity=Severity.MEDIUM,
+                    **subject,
+                )

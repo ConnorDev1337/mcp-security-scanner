@@ -197,6 +197,12 @@ def test_stdio_lists_prompts_and_resources_with_pagination(fixtures):
     ]
     assert inventory.notices == []
     assert inventory.resources[0].locate("uri") == _stdio(fixtures).locate()
+    found = {(f.rule.id, f.target) for f in analyze([], [inventory])}
+    assert {
+        ("MCPS103", "fake/prompt:summarize"),
+        ("MCPS214", "fake/resource:file:///home/alice/.ssh/id_rsa"),
+        ("MCPS206", "fake/resource:file:///{path}"),
+    } <= found
 
 
 def test_tools_only_server_is_not_asked_for_prompts_or_resources(fixtures):

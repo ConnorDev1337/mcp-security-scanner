@@ -306,6 +306,20 @@ _RULES: tuple[Rule, ...] = (
         "turning any prompt injection into code execution.",
         "Constrain the parameter (allow-list, pattern) or require confirmation for every call.",
     ),
+    Rule(
+        "MCPS214",
+        "sensitive-resource",
+        "Resource points at sensitive local data",
+        H,
+        "permissions",
+        "A resource or resource template URI references credentials or other sensitive local "
+        "files (SSH keys, cloud credentials, MCP client configurations, .env files, shell "
+        "history, /etc/shadow, browser or keychain stores). Hosts may attach resources to the "
+        "model context or let the model pick them, so the secret can end up in the "
+        "conversation and in any later tool call without the user noticing.",
+        "Do not expose credential files as resources. Restrict the server's resource roots to "
+        "the project data it needs and remove the server if it was not meant to publish them.",
+    ),
     # ------------------------------------------------------------ secrets
     Rule(
         "MCPS301",
