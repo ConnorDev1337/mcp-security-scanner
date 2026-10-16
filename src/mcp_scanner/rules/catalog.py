@@ -406,6 +406,51 @@ _RULES: tuple[Rule, ...] = (
         "into the model's context, so they deserve the same review as tool descriptions.",
         "Review the diff and approve it with --update-pins.",
     ),
+    Rule(
+        "MCPS406",
+        "prompt-definition-changed",
+        "Prompt definition changed since approval",
+        H,
+        "integrity",
+        "The hash of a prompt's listing metadata (name, title, description, arguments) differs "
+        "from the approved pin. Prompt templates reach the model when the user invokes them, "
+        "so a changed description or argument text can carry new instructions (rug pull).",
+        "Review the diff. If the change is legitimate, approve it with --update-pins.",
+    ),
+    Rule(
+        "MCPS407",
+        "resource-definition-changed",
+        "Resource definition changed since approval",
+        H,
+        "integrity",
+        "The metadata of a resource or resource template (name, title, description, MIME type, "
+        "annotations) differs from the approved pin. Resources are identified by URI, so a "
+        "changed URI appears as a new resource instead. Size and last-modified time are not "
+        "pinned because they follow the content.",
+        "Review the diff. If the change is legitimate, approve it with --update-pins.",
+    ),
+    Rule(
+        "MCPS408",
+        "unapproved-prompt-or-resource",
+        "Prompt or resource not in the approved pin set",
+        M,
+        "integrity",
+        "A prompt, resource or resource template appeared on an already-approved server, or "
+        "(with --frozen-pins) the prompts or resources of a server have never been approved, "
+        "for example after upgrading from a pin file that predates them. New concrete "
+        "resources are reported as low severity because resource lists are often dynamic.",
+        "Review the new prompt or resource and approve it with --update-pins.",
+    ),
+    Rule(
+        "MCPS409",
+        "prompt-or-resource-removed",
+        "Approved prompt or resource no longer present",
+        L,
+        "integrity",
+        "A previously approved prompt, resource or resource template disappeared. Usually "
+        "harmless, but it may accompany a renamed (and modified) replacement.",
+        "Confirm the removal and refresh the pins with --update-pins.",
+    ),
 )
 
 RULES: dict[str, Rule] = {rule.id: rule for rule in _RULES}
