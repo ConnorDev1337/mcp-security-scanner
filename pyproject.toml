@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,6 +8,8 @@ version = "0.1.0"
 description = "Defensive static scanner for MCP client configurations and tool definitions"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 dependencies = []
 keywords = ["mcp", "model-context-protocol", "security", "sarif", "prompt-injection", "tool-poisoning"]
 classifiers = [
@@ -27,6 +29,10 @@ dev = [
     "ruff>=0.6",
     "jsonschema>=4.21",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ConnorDev1337/mcp-security-scanner"
+Issues = "https://github.com/ConnorDev1337/mcp-security-scanner/issues"
 
 [project.scripts]
 mcp-scanner = "mcp_scanner.cli:main"
