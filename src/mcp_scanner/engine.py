@@ -35,7 +35,8 @@ def analyze(
 def finalize(findings: Iterable[Finding]) -> list[Finding]:
     """De-duplicate findings by fingerprint, keeping the most severe, and sort them.
 
-    Findings are ordered by descending severity, then server, tool, rule and location.
+    Findings are ordered by descending severity, then server, tool, prompt, resource,
+    rule and location.
     """
     unique: dict[str, Finding] = {}
     for finding in findings:
@@ -49,6 +50,8 @@ def finalize(findings: Iterable[Finding]) -> list[Finding]:
             -int(f.severity),
             f.server or "",
             f.tool or "",
+            f.prompt or "",
+            f.resource or "",
             f.rule.id,
             f.location.path or "",
             f.location.line or 0,
