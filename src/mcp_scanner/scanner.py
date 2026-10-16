@@ -92,13 +92,16 @@ def run_scan(options: ScanOptions, introspector: Introspector | None = None) -> 
                 notices.append(Notice("note", f"{server.name}: disabled, not introspected"))
                 continue
             try:
-                inventories.append(run(server, options.timeout))
-                known.add(server.name)
+                inventory = run(server, options.timeout)
             except IntrospectionError as exc:
                 source = server.source.path if server.source else None
                 notices.append(
                     Notice("warning", f"{server.name}: introspection failed: {exc}", source)
                 )
+                continue
+            inventories.append(inventory)
+            notices.extend(inventory.notices)
+            known.add(server.name)
 
     findings = engine.analyze(loaded.servers, inventories, documents)
 

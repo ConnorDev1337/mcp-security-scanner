@@ -1,8 +1,13 @@
-"""Opt-in live enumeration of tools (``tools/list``) over stdio or Streamable HTTP.
+"""Opt-in live enumeration of tools, prompts and resources over stdio or Streamable HTTP.
 
 WARNING: introspecting a stdio server EXECUTES its configured command with the
 caller's privileges. Only introspect servers you would run anyway, ideally in a
 container or VM, and prefer offline manifests (``--tools``).
+
+Only listing methods are called: ``tools/list``, plus ``prompts/list``,
+``resources/list`` and ``resources/templates/list`` when the server advertises
+the matching capability. ``prompts/get`` and ``resources/read`` are never
+called, so no prompt messages or resource contents are fetched.
 
 Hardening:
 
@@ -34,12 +39,33 @@ from urllib.parse import urlsplit
 
 from . import TOOL_NAME, __version__
 from .loader import UnresolvedVariable, expand_vars
-from .models import ServerConfig, ServerInventory, ToolDefinition
+from .models import (
+    Location,
+    Notice,
+    PromptDefinition,
+    ResourceDefinition,
+    ServerConfig,
+    ServerInventory,
+    ToolDefinition,
+)
 from .rules.config import is_loopback
 from .textutil import sanitize
 
 PROTOCOL_VERSION = "2025-06-18"
-MAX_PAGES = 100  # Upper bound on tools/list pages per server.
+MAX_PAGES = 100  # Upper bound on pages per list method and server.
+METHOD_NOT_FOUND = -32601  # JSON-RPC error code.
+# Optional listings: (inventory attribute, capability, method, result key, required item key).
+FEATURES = (
+    ("prompts", "prompts", "prompts/list", "prompts", "name"),
+    ("resources", "resources", "resources/list", "resources", "uri"),
+    (
+        "resource_templates",
+        "resources",
+        "resources/templates/list",
+        "resourceTemplates",
+        "uriTemplate",
+    ),
+)
 MAX_BODY = 32 * 1024 * 1024  # Maximum bytes read from a JSON (non-SSE) HTTP response.
 # Inherited variables needed to start a process; everything else must come from
 # the server's own configuration.
@@ -80,7 +106,22 @@ SAFE_ENV_KEYS = frozenset(
 
 
 class IntrospectionError(Exception):
-    """Live introspection of a server failed."""
+    """Live introspection of a server failed.
+
+    ``code`` is the JSON-RPC error code when the server answered with an error.
+    """
+
+    def __init__(self, message: str, code: int | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+def _rpc_error(method: str, error: Any) -> IntrospectionError:
+    code = error.get("code") if isinstance(error, dict) else None
+    return IntrospectionError(
+        f"{method} failed: {sanitize(json.dumps(error), 300)}",
+        code if isinstance(code, int) else None,
+    )
 
 
 def _initialize_params() -> dict[str, Any]:
@@ -111,30 +152,100 @@ def build_env(server: ServerConfig, environ: Mapping[str, str]) -> dict[str, str
     return env
 
 
-def _collect(
-    request: Callable[[str, dict[str, Any]], dict[str, Any]], init: dict[str, Any]
-) -> list[dict[str, Any]]:
+Request = Callable[[str, dict[str, Any]], dict[str, Any]]
+
+
+def _list_all(request: Request, method: str, key: str, required: str) -> list[dict[str, Any]]:
+    """Fetch every page of a paginated list ``method``; keep items with a string ``required``."""
+    items: list[dict[str, Any]] = []
+    cursor = None
+    for _ in range(MAX_PAGES):
+        result = request(method, {"cursor": cursor} if cursor else {})
+        page = result.get(key, [])
+        if isinstance(page, list):
+            items.extend(
+                i for i in page if isinstance(i, dict) and isinstance(i.get(required), str)
+            )
+        cursor = result.get("nextCursor")
+        if not cursor or not isinstance(cursor, str):
+            break
+    return items
+
+
+def _collect(request: Request, init: dict[str, Any]) -> list[dict[str, Any]]:
     """Fetch every ``tools/list`` page, unless the server does not advertise tools."""
     capabilities = init.get("capabilities")
     if isinstance(capabilities, dict) and "tools" not in capabilities:
         return []
-    tools: list[dict[str, Any]] = []
-    cursor = None
-    for _ in range(MAX_PAGES):
-        result = request("tools/list", {"cursor": cursor} if cursor else {})
-        page = result.get("tools", [])
-        if isinstance(page, list):
-            tools.extend(t for t in page if isinstance(t, dict) and isinstance(t.get("name"), str))
-        cursor = result.get("nextCursor")
-        if not cursor:
-            break
-    return tools
+    return _list_all(request, "tools/list", "tools", "name")
 
 
-def _inventory(server: ServerConfig, init: dict[str, Any], tools: list[dict]) -> ServerInventory:
+def _collect_features(
+    request: Request, init: dict[str, Any]
+) -> tuple[dict[str, list[dict[str, Any]] | None], list[str]]:
+    """List the prompts, resources and resource templates that the server advertises.
+
+    Return the items per inventory attribute and a list of warnings. A missing
+    capability means the server declares none (``[]``). A failed listing leaves
+    that kind uncollected (``None``) with a warning instead of failing the whole
+    introspection, so the tools already fetched are still analyzed.
+    """
+    capabilities = init.get("capabilities")
+    collected: dict[str, list[dict[str, Any]] | None] = {}
+    warnings: list[str] = []
+    for attr, capability, method, key, required in FEATURES:
+        if not isinstance(capabilities, dict):
+            collected[attr] = None  # Nothing advertised at all: unknown, not "none".
+        elif capability not in capabilities:
+            collected[attr] = []
+        else:
+            try:
+                collected[attr] = _list_all(request, method, key, required)
+            except IntrospectionError as exc:
+                if exc.code == METHOD_NOT_FOUND:
+                    # Common for resources/templates/list; clients cannot list them either.
+                    collected[attr] = []
+                else:
+                    collected[attr] = None
+                    warnings.append(f"{exc} ({attr.replace('_', ' ')} not analyzed)")
+    return collected, warnings
+
+
+def _enumerate(
+    request: Request, init: dict[str, Any]
+) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]] | None], list[str]]:
+    """Run every listing method within the session's single deadline."""
+    tools = _collect(request, init)
+    features, warnings = _collect_features(request, init)
+    return tools, features, warnings
+
+
+def _resources(
+    items: list[dict[str, Any]] | None, location: Location, *, template: bool
+) -> list[ResourceDefinition] | None:
+    if items is None:
+        return None
+    return [
+        ResourceDefinition(
+            i["name"] if isinstance(i.get("name"), str) else "",
+            i,
+            fallback=location,
+            template=template,
+        )
+        for i in items
+    ]
+
+
+def _inventory(
+    server: ServerConfig,
+    init: dict[str, Any],
+    listing: tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]] | None], list[str]],
+) -> ServerInventory:
+    tools, features, warnings = listing
     location = server.locate()
     instructions = init.get("instructions")
     info = init.get("serverInfo")
+    prompts = features.get("prompts")
     return ServerInventory(
         server=server.name,
         tools=[ToolDefinition(t["name"], t, fallback=location) for t in tools],
@@ -142,6 +253,12 @@ def _inventory(server: ServerConfig, init: dict[str, Any], tools: list[dict]) ->
         server_info=info if isinstance(info, dict) else {},
         origin="introspection",
         fallback=location,
+        prompts=None
+        if prompts is None
+        else [PromptDefinition(p["name"], p, fallback=location) for p in prompts],
+        resources=_resources(features.get("resources"), location, template=False),
+        resource_templates=_resources(features.get("resource_templates"), location, template=True),
+        notices=[Notice("warning", f"{server.name}: {w}", location.path) for w in warnings],
     )
 
 
@@ -211,8 +328,7 @@ class _StdioSession:
             if message.get("id") != request_id:
                 continue
             if "error" in message:
-                error = sanitize(json.dumps(message["error"]), 300)
-                raise IntrospectionError(f"{method} failed: {error}")
+                raise _rpc_error(method, message["error"])
             result = message.get("result")
             if not isinstance(result, dict):
                 raise IntrospectionError(f"{method} returned an invalid result")
@@ -288,10 +404,10 @@ def _introspect_stdio(
     try:
         init = session.request("initialize", _initialize_params())
         session.notify("notifications/initialized")
-        tools = _collect(session.request, init)
+        listing = _enumerate(session.request, init)
     finally:
         session.close()
-    return _inventory(server, init, tools)
+    return _inventory(server, init, listing)
 
 
 # --------------------------------------------------------------------------- Streamable HTTP
@@ -360,7 +476,10 @@ class _HttpSession:
             if "text/event-stream" in content_type:
                 message = self._read_sse(response, self.next_id, method)
             else:
-                body = json.loads(response.read(MAX_BODY) or b"null")
+                try:
+                    body = json.loads(response.read(MAX_BODY) or b"null")
+                except ValueError:
+                    raise IntrospectionError(f"{method}: invalid JSON response") from None
                 candidates = body if isinstance(body, list) else [body]
                 message = next(
                     (m for m in candidates if isinstance(m, dict) and m.get("id") == self.next_id),
@@ -369,9 +488,7 @@ class _HttpSession:
         if not isinstance(message, dict):
             raise IntrospectionError(f"{method}: no response from server")
         if "error" in message:
-            raise IntrospectionError(
-                f"{method} failed: {sanitize(json.dumps(message['error']), 300)}"
-            )
+            raise _rpc_error(method, message["error"])
         result = message.get("result")
         if not isinstance(result, dict):
             raise IntrospectionError(f"{method} returned an invalid result")
@@ -426,20 +543,21 @@ def _introspect_http(
         version = init.get("protocolVersion")
         session.protocol = version if isinstance(version, str) else PROTOCOL_VERSION
         session.notify("notifications/initialized")
-        tools = _collect(session.request, init)
+        listing = _enumerate(session.request, init)
     finally:
         session.close()
-    return _inventory(server, init, tools)
+    return _inventory(server, init, listing)
 
 
 def introspect(
     server: ServerConfig, timeout: float = 20.0, environ: Mapping[str, str] | None = None
 ) -> ServerInventory:
-    """Fetch the tool inventory of ``server``; stdio servers are executed.
+    """Fetch the tool, prompt and resource inventory of ``server``; stdio servers are executed.
 
     Variables in the configuration are expanded from ``environ`` (default:
-    ``os.environ``). Raise :class:`IntrospectionError` on any failure, including
-    unsupported transports.
+    ``os.environ``). Raise :class:`IntrospectionError` if the session or
+    ``tools/list`` fails, including unsupported transports. Failed prompt and
+    resource listings are reported in ``inventory.notices`` instead.
     """
     environ = os.environ if environ is None else environ
     if server.transport == "stdio":
