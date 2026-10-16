@@ -1,0 +1,25 @@
+# Template: add this job to the .gitlab-ci.yml of the project that holds your
+# MCP configuration. Replace COMMIT_SHA with a reviewed commit of the scanner
+# and adjust the config paths. mcp-tools.json and mcp-pins.json are produced
+# locally (see the README, "Fijado por hash") and committed after review.
+#
+# While the scanner repository is private, the consuming project must be in
+# its CI/CD job token allowlist (Settings > CI/CD > Job token permissions).
+mcp-scan:
+  image: python:3.13  # full image: pip needs git to install from a repository
+  rules:
+    - changes: [.mcp.json, .vscode/mcp.json, .cursor/mcp.json, mcp-tools.json, mcp-pins.json]
+  script:
+    - >
+      pip install
+      "mcp-security-scanner @ git+https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/connorhack/tools/mcp-security-scanner.git@COMMIT_SHA"
+    - >
+      mcp-scanner scan .mcp.json
+      --tools mcp-tools.json
+      --pins mcp-pins.json --frozen-pins
+      --json mcp-scanner.json --sarif mcp-scanner.sarif
+      --fail-on high
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths: [mcp-scanner.json, mcp-scanner.sarif]

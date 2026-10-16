@@ -36,15 +36,16 @@ plano y cambios silenciosos en herramientas ya aprobadas (*rug pull*).
 - [Reglas](#reglas)
 - [Fijado por hash](#fijado-por-hash)
 - [Salidas y códigos de salida](#salidas-y-códigos-de-salida)
-- [GitHub Code Scanning](#github-code-scanning)
+- [Integración en CI (GitLab y GitHub)](#integración-en-ci-gitlab-y-github)
 - [Modelo de amenazas](#modelo-de-amenazas)
 - [Limitaciones](#limitaciones)
 - [Desarrollo](#desarrollo)
+- [Licencia](#licencia)
 
 ## Instalación
 
 ```bash
-git clone <url-del-repo> mcp-security-scanner
+git clone https://gitlab.com/connorhack/tools/mcp-security-scanner.git
 cd mcp-security-scanner
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
@@ -234,7 +235,31 @@ El JSON (`schema: mcp-security-scanner/report/v1`) incluye resumen por severidad
 argumentos y URLs enmascarados y solo los *nombres* de las variables de entorno), inventarios,
 hallazgos con ubicación (`path`, `line`, `column`, JSON Pointer), remediación y *fingerprint*.
 
-## GitHub Code Scanning
+## Integración en CI (GitLab y GitHub)
+
+En CI el patrón es siempre el mismo: `mcp-tools.json` y `mcp-pins.json` versionados junto a la
+configuración, `--frozen-pins` para que el pipeline nunca apruebe nada por su cuenta y
+`--fail-on` como umbral.
+
+### GitLab CI
+
+Plantilla: [`examples/gitlab-ci.yml`](examples/gitlab-ci.yml). El job falla con hallazgos de
+severidad alta o superior y guarda el informe JSON y el SARIF como artefactos. Mientras este
+repositorio sea privado, el proyecto que lo use debe estar en la lista de *CI/CD job token* del
+escáner para que `pip install` pueda clonarlo con `CI_JOB_TOKEN`.
+
+```yaml
+mcp-scan:
+  image: python:3.13
+  script:
+    - pip install "mcp-security-scanner @ git+https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/connorhack/tools/mcp-security-scanner.git@COMMIT_SHA"
+    - mcp-scanner scan .mcp.json --tools mcp-tools.json --pins mcp-pins.json --frozen-pins --json mcp-scanner.json --fail-on high
+  artifacts:
+    when: always
+    paths: [mcp-scanner.json]
+```
+
+### GitHub Code Scanning
 
 El SARIF incluye todas las reglas con `security-severity` (GitHub las clasifica como
 crítica/alta/media/baja), rutas relativas a `%SRCROOT%` con línea y columna, y
@@ -343,9 +368,14 @@ pytest --cov                      # tests + cobertura
 ruff check src tests && ruff format --check src tests
 ```
 
-CI (`.github/workflows/ci.yml`): lint, matriz de tests (Linux/Windows/macOS × Python 3.11–3.13,
-cobertura mínima 85 %) y un *self-scan* end-to-end de los ejemplos que guarda el SARIF como
-artefacto. Las Actions están fijadas por SHA y Dependabot las mantiene al día.
+CI:
+
+- **GitLab** (`.gitlab-ci.yml`, el repositorio principal): lint con ruff, tests en Python
+  3.11/3.12/3.13 sobre Linux (cobertura mínima 85 %, informes JUnit y Cobertura en las MR) y un
+  *self-scan* end-to-end de los ejemplos que comprueba los códigos de salida y guarda SARIF/JSON
+  como artefactos.
+- **GitHub** (`.github/workflows/ci.yml`, para el futuro espejo): lo mismo con matriz
+  Linux/Windows/macOS. Las Actions están fijadas por SHA y Dependabot las mantiene al día.
 
 Los tests usan casos propios: ataques conocidos (*tool poisoning* con `<IMPORTANT>`, *shadowing*
 de `send_email`, *ASCII smuggling* con tags Unicode, selectores de variación, base64, Trojan Source,
@@ -366,5 +396,9 @@ src/mcp_scanner/
   rules/            catalog, poisoning, unicode, config, capabilities, secrets
   reporters/        table, json_report, sarif
 tests/              pytest + fixtures (configs, tools, servidor MCP falso, esquema SARIF)
-examples/           configuración y herramientas de ejemplo + plantilla de workflow
+examples/           configuración y herramientas de ejemplo + plantillas de CI (GitLab, GitHub)
 ```
+
+## Licencia
+
+[Apache License 2.0](LICENSE).
