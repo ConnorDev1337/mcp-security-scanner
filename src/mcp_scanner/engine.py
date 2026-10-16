@@ -1,4 +1,4 @@
-"""Run every static rule over loaded configurations and tool inventories."""
+"""Run every static rule over loaded configurations and server inventories."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from collections.abc import Iterable
 
 from .jsonloc import SourceDocument
 from .models import Finding, ServerConfig, ServerInventory
-from .rules import capabilities, config, poisoning, secrets, unicode
+from .rules import capabilities, config, poisoning, resources, secrets, unicode
 
 
 def analyze(
@@ -27,8 +27,14 @@ def analyze(
         for tool in inv.tools:
             findings.extend(poisoning.check_tool(inv, tool))
             findings.extend(capabilities.check_tool(inv, tool))
+        for prompt in inv.prompts or ():
+            findings.extend(poisoning.check_prompt(inv, prompt))
+        for resource in inv.all_resources():
+            findings.extend(poisoning.check_resource(inv, resource))
+            findings.extend(resources.check_resource(inv, resource))
         findings.extend(poisoning.check_instructions(inv))
     findings.extend(poisoning.check_cross_server(inventories))
+    findings.extend(poisoning.check_prompt_resource_references(inventories))
     return finalize(findings)
 
 

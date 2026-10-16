@@ -174,7 +174,13 @@ def _mask_url(match: re.Match[str]) -> str:
     if password and not is_reference(password):
         url = url.replace(f":{password}@", ":****@", 1)
     for key, value in parse_qsl(parts.query):
-        if _SENSITIVE_PARAM.match(key) and value and not is_reference(value):
+        # Skip values that mask() already redacted as provider tokens ("ghp_****(40 chars)").
+        if (
+            _SENSITIVE_PARAM.match(key)
+            and value
+            and not is_reference(value)
+            and "****" not in value
+        ):
             url = url.replace(f"{key}={value}", f"{key}=****", 1)
     return url
 
