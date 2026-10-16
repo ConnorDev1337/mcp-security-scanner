@@ -24,6 +24,7 @@ class Severity(enum.IntEnum):
 
     @classmethod
     def parse(cls, value: str) -> Severity:
+        """Parse a case-insensitive severity name; raise ``ValueError`` if unknown."""
         try:
             return cls[value.strip().upper()]
         except KeyError:
@@ -36,6 +37,7 @@ def escape_token(token: str | int) -> str:
 
 
 def join_pointer(base: str, *parts: str | int) -> str:
+    """Append ``parts`` as escaped reference tokens to the JSON Pointer ``base``."""
     return base + "".join("/" + escape_token(p) for p in parts)
 
 
@@ -74,7 +76,7 @@ class ServerConfig:
     url: str | None = None
     headers: dict[str, str] = field(default_factory=dict)
     cwd: str | None = None
-    scope: str | None = None  # e.g. project path for Claude Code local servers
+    scope: str | None = None  # Project path of a Claude Code local-scope server.
     raw: dict[str, Any] = field(default_factory=dict)
     source: SourceDocument | None = None
     pointer: str = ""
@@ -154,6 +156,8 @@ class Rule:
 
 @dataclass
 class Finding:
+    """A rule match; ``severity`` defaults to the rule's own severity."""
+
     rule: Rule
     message: str
     location: Location

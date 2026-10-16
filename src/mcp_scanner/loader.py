@@ -1,7 +1,7 @@
 """Load MCP client configuration files and normalize their server entries.
 
-Supported layouts (all detected by content, the file name only refines the
-client label):
+Supported layouts (detected by content; the file name only refines the client
+label):
 
 * ``mcpServers``            Claude Desktop, Claude Code (.mcp.json), Cursor,
                             Windsurf, Cline/Roo, Gemini CLI, Amazon Q
@@ -26,6 +26,7 @@ from typing import Any
 from .jsonloc import JSONLocError, SourceDocument, load_document
 from .models import Notice, ServerConfig, join_pointer
 
+# Client-specific transport names mapped to the normalized transport.
 _TRANSPORTS = {
     "stdio": "stdio",
     "local": "stdio",
@@ -39,7 +40,7 @@ _TRANSPORTS = {
 
 
 class ConfigError(Exception):
-    pass
+    """A configuration file cannot be used."""
 
 
 @dataclass
@@ -55,6 +56,7 @@ class LoadResult:
 
 
 def guess_client(path: Path, data: Any) -> str:
+    """Infer the MCP client from the file path and top-level keys (else ``"generic"``)."""
     name = path.name.lower()
     parts = {p.lower() for p in path.parts}
     keys = set(data) if isinstance(data, dict) else set()
@@ -136,11 +138,11 @@ def _normalize(
     command = entry.get("command")
     args: Any = entry.get("args", [])
     env: Any = entry.get("env", {})
-    if isinstance(command, dict):  # Zed legacy: {"command": {"path", "args", "env"}}
+    if isinstance(command, dict):  # Legacy Zed format: {"path", "args", "env"}.
         args = command.get("args", args)
         env = command.get("env", env)
         command = command.get("path")
-    if isinstance(command, list):  # some tools store the whole argv
+    if isinstance(command, list):  # Some clients store the whole argv in "command".
         args = command[1:] + (args if isinstance(args, list) else [])
         command = command[0] if command else None
     if isinstance(args, str):
@@ -187,6 +189,7 @@ def _normalize(
 
 
 def extract_servers(doc: SourceDocument, client: str) -> tuple[list[ServerConfig], list[Notice]]:
+    """Return the normalized servers of ``doc`` and notices for unusable entries."""
     servers: list[ServerConfig] = []
     notices: list[Notice] = []
     containers = _containers(doc.data, client)
@@ -205,7 +208,7 @@ def extract_servers(doc: SourceDocument, client: str) -> tuple[list[ServerConfig
 
 
 def load_config(path: str | Path, client: str | None = None) -> LoadResult:
-    """Load one configuration file. Errors are reported as notices, not raised."""
+    """Load one configuration file; errors are reported as notices instead of raised."""
     result = LoadResult()
     file_path = Path(path)
     try:
@@ -214,7 +217,9 @@ def load_config(path: str | Path, client: str | None = None) -> LoadResult:
         result.notices.append(Notice("error", "file not found", str(file_path)))
         return result
     except (OSError, UnicodeDecodeError, ValueError, JSONLocError, tomllib.TOMLDecodeError) as exc:
-        result.notices.append(Notice("error", f"cannot parse configuration: {exc}", str(file_path)))
+        result.notices.append(
+            Notice("error", f"cannot parse configuration: {exc}", str(file_path))
+        )
         return result
     result.documents.append(doc)
     detected = client or guess_client(file_path, doc.data)
@@ -225,6 +230,7 @@ def load_config(path: str | Path, client: str | None = None) -> LoadResult:
 
 
 def load_configs(paths: Iterable[str | Path], client: str | None = None) -> LoadResult:
+    """Load several configuration files, skipping repeated paths."""
     result = LoadResult()
     seen: set[str] = set()
     for path in paths:
@@ -245,7 +251,7 @@ def candidate_paths(
     environ: Mapping[str, str] | None = None,
     system: str | None = None,
 ) -> list[tuple[str, Path]]:
-    """Well-known configuration locations for popular MCP clients."""
+    """Return ``(client, path)`` for the well-known configuration files of MCP clients."""
     environ = os.environ if environ is None else environ
     system = system or platform.system()
     if system == "Windows":
@@ -306,7 +312,7 @@ _VAR = re.compile(r"\$\{(?:env:)?([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
 
 
 class UnresolvedVariable(KeyError):
-    pass
+    """A variable reference that cannot be expanded without user input."""
 
 
 def expand_vars(value: str, environ: Mapping[str, str]) -> str:

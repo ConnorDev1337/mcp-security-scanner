@@ -1,11 +1,11 @@
-"""MCPS101-MCPS110 (+ text side of MCPS120-122/MCPS301): tool poisoning.
+"""MCPS101-MCPS110: tool poisoning, plus the text checks of MCPS120-MCPS122 and MCPS301.
 
-Every text the model will read is scanned: tool title/description, parameter
-descriptions, defaults/enums, output schema and the server ``instructions``.
-Keyword rules run on a normalized copy of the text (invisible characters
-removed, NFKC, homoglyphs folded) so trivial obfuscation does not evade them;
-payloads hidden with Unicode tag characters, variation selectors or base64 are
-decoded and scanned too.
+Every text the model reads is scanned: tool titles and descriptions, parameter
+descriptions, defaults and enums, output schemas and server ``instructions``.
+Keyword rules match a normalized copy (hidden characters removed, NFKC,
+homoglyphs folded) so trivial obfuscation does not evade them. Payloads hidden
+in Unicode tag characters, variation selectors or base64 are decoded and
+scanned too.
 """
 
 from __future__ import annotations
@@ -23,14 +23,16 @@ from . import secrets as secret_rules
 from . import unicode as unicode_rules
 from .catalog import get
 
-OVERSIZED_DESCRIPTION = 5000
+OVERSIZED_DESCRIPTION = 5000  # Characters (MCPS110).
 MAX_SCHEMA_DEPTH = 32
 
 
 @dataclass(frozen=True)
 class TextField:
-    parts: tuple[str | int, ...]  # JSON Pointer parts relative to the owner
-    label: str  # human description, e.g. "description of parameter 'path'"
+    """One piece of tool or server metadata that the model reads."""
+
+    parts: tuple[str | int, ...]  # JSON Pointer parts relative to the owner.
+    label: str  # Human-readable, e.g. "description of parameter 'path'".
     text: str
     kind: str  # "description" | "parameter" | "value" | "name" | "instructions"
 
@@ -44,14 +46,16 @@ class _Pattern:
     rule_id: str
     regex: re.Pattern[str]
     severity: Severity | None = None
-    raw: bool = False  # match the original text instead of the normalized one
+    raw: bool = False  # Match the text before normalization (hidden characters stripped).
 
 
 def _n(rule_id: str, pattern: str, severity: Severity | None = None) -> _Pattern:
+    """Build a pattern matched against the normalized (lowercase) text."""
     return _Pattern(rule_id, re.compile(pattern), severity)
 
 
 def _r(rule_id: str, pattern: str, severity: Severity | None = None) -> _Pattern:
+    """Build a case-insensitive pattern matched against the non-normalized text."""
     return _Pattern(rule_id, re.compile(pattern, re.IGNORECASE | re.DOTALL), severity, raw=True)
 
 
@@ -64,7 +68,8 @@ _TELL = (
 _NOT = r"(?<!not )(?<!never )(?<!n't )(?<!dont )(?<!no )"
 _SECRETS = (
     r"(?:api[\s_\-]?keys?|passwords?|passphrases?|secrets?|credentials?|private[\s_\-]?keys?|"
-    r"access[\s_\-]?tokens?|auth(?:entication)?[\s_\-]?tokens?|session[\s_\-]?(?:cookies?|tokens?)|"
+    r"access[\s_\-]?tokens?|auth(?:entication)?[\s_\-]?tokens?|"
+    r"session[\s_\-]?(?:cookies?|tokens?)|"
     r"cookies|\.env(?:\s+files?)?|environment\s+variables?)"
 )
 
@@ -84,7 +89,9 @@ PATTERNS: tuple[_Pattern, ...] = (
         r"end_header_id|eot_id)\|>",
     ),
     _n("MCPS101", r"\[/?inst\]|<<\s*/?sys\s*>>"),
-    _n("MCPS101", r"(?:^|\s)#{1,6}\s*(?:system|assistant)\s*(?:prompt|message|instructions?)?\s*:"),
+    _n(
+        "MCPS101", r"(?:^|\s)#{1,6}\s*(?:system|assistant)\s*(?:prompt|message|instructions?)?\s*:"
+    ),
     _n(
         "MCPS101",
         r"\b(?:begin|start|end)\s+(?:of\s+)?(?:system|hidden|secret|admin)\s+"
@@ -104,7 +111,8 @@ PATTERNS: tuple[_Pattern, ...] = (
     _n("MCPS102", r"\b(?:new|updated|real|actual|true)\s+(?:system\s+)?instructions?\s*:"),
     _n("MCPS102", r"\b(?:developer|god|admin|jailbreak|dan|unrestricted)\s+mode\b"),
     _n(
-        "MCPS102", r"\bdo\s+not\s+follow\s+(?:the\s+|your\s+|any\s+)?(?:previous|system|original)\b"
+        "MCPS102",
+        r"\bdo\s+not\s+follow\s+(?:the\s+|your\s+|any\s+)?(?:previous|system|original)\b",
     ),
     # MCPS103 concealment from the user
     _n("MCPS103", rf"\b{_NEG}\s+(?:ever\s+)?{_TELL}\b[^.!?]{{0,80}}?\buser\b"),
@@ -242,14 +250,14 @@ PATTERNS: tuple[_Pattern, ...] = (
         r"\binstead\s+of\s+(?:using\s+|calling\s+)?(?:the\s+)?[\w.\-]+\s+tool\b",
         Severity.MEDIUM,
     ),
-    # MCPS107 hidden content (raw text)
+    # MCPS107 hidden content (matched before normalization)
     _r("MCPS107", r"<!--.*?-->"),
     _r(
         "MCPS107",
         r"display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(?:px|pt|em|rem)?"
         r"\b|opacity\s*:\s*0(?:\.0+)?\b|color\s*:\s*(?:transparent|white|#fff(?:fff)?\b)",
     ),
-    _r("MCPS107", r"(?:[ \t]*\n){12,}|[ \t ]{80,}"),
+    _r("MCPS107", r"(?:[ \t]*\n){12,}|[ \t\u00a0]{80,}"),
     # MCPS108 model-directed imperatives
     _n(
         "MCPS108",
@@ -293,6 +301,8 @@ _BASE64 = re.compile(r"(?<![A-Za-z0-9+/=])[A-Za-z0-9+/]{48,}={0,2}(?![A-Za-z0-9+
 
 @dataclass(frozen=True)
 class TextHit:
+    """The most severe match of one rule in one text; ``count`` totals all matches."""
+
     rule_id: str
     severity: Severity
     evidence: str
@@ -301,6 +311,7 @@ class TextHit:
 
 
 def _decode_base64(blob: str) -> str | None:
+    """Return the decoded text if ``blob`` is base64 of mostly printable UTF-8."""
     try:
         data = base64.b64decode(blob + "=" * (-len(blob) % 4), validate=True)
         text = data.decode("utf-8")
@@ -311,7 +322,11 @@ def _decode_base64(blob: str) -> str | None:
 
 
 def scan_text(text: str, kind: str, _depth: int = 0) -> list[TextHit]:
-    """Run keyword/structure rules on one text. One hit per rule (highest severity)."""
+    """Run the keyword and structure rules on ``text``.
+
+    Return at most one hit per rule. Base64 payloads are decoded and scanned
+    recursively, up to two levels deep.
+    """
     normalized = normalize_for_matching(text)
     stripped = strip_hidden(text)
     hits: dict[str, TextHit] = {}
@@ -327,7 +342,7 @@ def scan_text(text: str, kind: str, _depth: int = 0) -> list[TextHit]:
 
     for pattern in PATTERNS:
         if kind == "instructions" and pattern.rule_id == "MCPS108":
-            continue  # server instructions are meant to address the model
+            continue  # Server instructions legitimately address the model.
         subject = stripped if pattern.raw else normalized
         matches = list(pattern.regex.finditer(subject))
         if matches:
@@ -364,6 +379,7 @@ def scan_text(text: str, kind: str, _depth: int = 0) -> list[TextHit]:
 def _schema_fields(
     schema: object, parts: tuple[str | int, ...], param: str, root: str, depth: int
 ) -> Iterator[TextField]:
+    """Yield the text fields of a JSON Schema, recursing into nested schemas."""
     if depth > MAX_SCHEMA_DEPTH or not isinstance(schema, dict):
         return
     where = f"parameter '{param}'" if param else root
@@ -378,7 +394,9 @@ def _schema_fields(
         if isinstance(values, list):
             for index, value in enumerate(values):
                 if isinstance(value, str):
-                    yield TextField((*parts, key, index), f"{key} value of {where}", value, "value")
+                    yield TextField(
+                        (*parts, key, index), f"{key} value of {where}", value, "value"
+                    )
     properties = schema.get("properties")
     if isinstance(properties, dict):
         for name, sub in properties.items():
@@ -409,6 +427,7 @@ def _schema_fields(
 
 
 def tool_text_fields(tool: ToolDefinition) -> Iterator[TextField]:
+    """Yield every text of ``tool`` that the model reads, including schema contents."""
     raw = tool.raw
     yield TextField(("name",), "tool name", tool.name, "name")
     if isinstance(raw.get("title"), str):
@@ -501,10 +520,12 @@ def check_instructions(inv: ServerInventory) -> Iterator[Finding]:
 
 
 def _distinctive(name: str) -> bool:
+    """Return whether a tool name is specific enough to search for in free text."""
     return len(name) >= 5 and bool(re.search(r"[_\-.]|[a-z][A-Z]", name))
 
 
 def check_cross_server(inventories: list[ServerInventory]) -> Iterator[Finding]:
+    """Report tool names shared by several servers and references to other servers' tools."""
     owners: dict[str, list[str]] = defaultdict(list)
     for inv in inventories:
         for tool in inv.tools:

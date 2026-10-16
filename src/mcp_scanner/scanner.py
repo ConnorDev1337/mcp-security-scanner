@@ -39,6 +39,7 @@ class ScanReport:
     finished_at: str
 
     def counts(self, findings: list[Finding] | None = None) -> dict[str, int]:
+        """Count ``findings`` (default: all) per severity label, most severe first."""
         tally = Counter(f.severity for f in (self.findings if findings is None else findings))
         return {s.label: tally.get(s, 0) for s in sorted(Severity, reverse=True)}
 
@@ -55,6 +56,12 @@ Introspector = Callable[[ServerConfig, float], ServerInventory]
 
 
 def run_scan(options: ScanOptions, introspector: Introspector | None = None) -> ScanReport:
+    """Run a complete scan as described by ``options``.
+
+    Unreadable inputs and failed introspection are reported as notices instead of
+    raising. The pin file is saved when pinning changed it. ``introspector``
+    replaces :func:`~mcp_scanner.introspect.introspect`, e.g. with a stub.
+    """
     started = _now()
     notices: list[Notice] = []
 

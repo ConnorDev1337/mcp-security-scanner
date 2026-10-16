@@ -1,18 +1,18 @@
-"""Load tool definitions captured from MCP servers (offline, no execution).
+"""Load tool definitions captured from MCP servers (offline, nothing is executed).
 
 Accepted shapes:
 
-* scanner dump / multi-server manifest::
+* scanner dump or multi-server manifest::
 
       {"servers": {"<name>": {"instructions": "...", "tools": [...]}}}
 
 * a ``tools/list`` result: ``{"tools": [...]}``
 * a full JSON-RPC response: ``{"jsonrpc": "2.0", "id": 1, "result": {"tools": [...]}}``
-* a bare JSON array of tools.
+* a bare JSON array of tools
 
 Single-server shapes take their server name from ``NAME=FILE`` on the command
-line, then from a top-level ``"server"``/``serverInfo.name`` key, then from the
-file stem.
+line, then from a top-level ``"server"`` or ``serverInfo.name`` key, then from
+the file stem.
 """
 
 from __future__ import annotations
@@ -29,11 +29,11 @@ from .models import Notice, ServerInventory, ToolDefinition, join_pointer
 
 
 class ManifestError(Exception):
-    pass
+    """The document does not have a recognized tool manifest shape."""
 
 
 def parse_spec(spec: str) -> tuple[str | None, Path]:
-    """Split ``NAME=FILE`` (the name is optional)."""
+    """Split ``[NAME=]FILE``; an existing file whose name contains ``=`` is kept whole."""
     if "=" in spec and not Path(spec).exists():
         name, _, path = spec.partition("=")
         if name and path:
@@ -83,6 +83,10 @@ def _inventory(
 def inventories_from_document(
     doc: SourceDocument, server_name: str | None = None
 ) -> tuple[list[ServerInventory], list[Notice]]:
+    """Extract server inventories from a parsed manifest.
+
+    Raise :class:`ManifestError` if the document has none of the accepted shapes.
+    """
     data = doc.data
     notices: list[Notice] = []
     fallback_name = server_name or Path(doc.path).stem
@@ -119,6 +123,7 @@ def inventories_from_document(
 
 
 def load_manifest(spec: str) -> tuple[list[ServerInventory], list[Notice]]:
+    """Load ``[NAME=]FILE``; errors are returned as notices instead of raised."""
     name, path = parse_spec(spec)
     try:
         doc = load_document(path)

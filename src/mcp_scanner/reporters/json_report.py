@@ -42,6 +42,7 @@ def _finding(finding: Finding, root: Path) -> dict[str, Any]:
 def build(
     report: ScanReport, *, root: Path | None = None, min_severity: Severity = Severity.INFO
 ) -> dict[str, Any]:
+    """Return the report as a JSON-serializable dict (schema ``SCHEMA_ID``)."""
     root = root or Path.cwd()
     findings = [f for f in report.findings if f.severity >= min_severity]
     tools_by_server = {inv.server: inv for inv in report.inventories}
@@ -112,5 +113,6 @@ def build(
 def render(
     report: ScanReport, *, root: Path | None = None, min_severity: Severity = Severity.INFO
 ) -> str:
+    """Serialize :func:`build` as indented JSON."""
     payload = build(report, root=root, min_severity=min_severity)
     return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"

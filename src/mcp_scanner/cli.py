@@ -1,7 +1,8 @@
-"""Command-line interface.
+"""Command-line interface (``mcp-scanner``).
 
 Exit codes: 0 = no finding at or above ``--fail-on``; 1 = such findings exist;
-2 = usage error or an input (config, manifest, pin file) could not be read.
+2 = usage error, or an input (config, manifest, pin file) could not be read
+(unless code 1 applies).
 """
 
 from __future__ import annotations
@@ -98,14 +99,16 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _enable_windows_ansi() -> bool:
+    """Enable ANSI escape processing on the Windows console; return whether it is on."""
     try:
         import ctypes
 
         kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
-        handle = kernel32.GetStdHandle(-11)
+        handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
         mode = ctypes.c_uint32()
         if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
             return False
+        # 0x0004 is ENABLE_VIRTUAL_TERMINAL_PROCESSING.
         return bool(kernel32.SetConsoleMode(handle, mode.value | 0x0004))
     except (AttributeError, OSError):
         return False
@@ -220,6 +223,8 @@ def _cmd_discover(_: argparse.Namespace) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Run the command line and return the process exit code."""
+    # Untrusted text must never crash output on consoles with a narrow encoding.
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(errors="backslashreplace")

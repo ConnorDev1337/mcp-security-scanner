@@ -127,13 +127,15 @@ def test_docker_tag_without_digest_is_low():
         (["run", "--privileged", "img@sha256:" + "a" * 64], Severity.HIGH),
         (["run", "-v", "/:/host", "i@sha256:" + "a" * 64], Severity.HIGH),
         (["run", "-v", "C:\\Users\\bob:/data", "i@sha256:" + "a" * 64], Severity.HIGH),
-        (["run", "--mount", "type=bind,source=/var/run/docker.sock,target=/s", "i:1"],
-         Severity.CRITICAL),
+        (
+            ["run", "--mount", "type=bind,source=/var/run/docker.sock,target=/s", "i:1"],
+            Severity.CRITICAL,
+        ),
         (["run", "--cap-add=SYS_ADMIN", "i@sha256:" + "a" * 64], Severity.HIGH),
         (["run", "--pid", "host", "i@sha256:" + "a" * 64], Severity.HIGH),
         (["run", "-u", "root", "i@sha256:" + "a" * 64], Severity.MEDIUM),
     ],
-)  # fmt: skip
+)
 def test_privileged_containers(args, severity):
     findings = _rules(_server(command="docker", args=args))["MCPS205"]
     assert max(f.severity for f in findings) == severity

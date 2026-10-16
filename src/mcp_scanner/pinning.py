@@ -1,15 +1,14 @@
 """Hash pinning of tool definitions and launch configurations (rug-pull detection).
 
-Trust-on-first-use: the first time a server is seen, the SHA-256 of each tool
-definition (and of the server instructions and launch configuration) is stored
-in a pin file. Later scans compare against it and report every change until it
-is explicitly approved with ``--update-pins``. Changed tools are never
-re-pinned silently. ``--frozen-pins`` turns off TOFU for CI: nothing is
-written and anything not already approved is reported.
+Trust on first use (TOFU): the first scan of a server stores SHA-256 hashes of
+its tool definitions, instructions and launch configuration in a pin file.
+Later scans report every change until it is approved with ``--update-pins``;
+changes are never re-pinned silently. ``--frozen-pins`` (for CI) disables TOFU:
+nothing is written and anything not already approved is reported.
 
-The pin file is meant to be reviewable and committable: it stores hashes, the
-approved tool definitions (so changes can be shown as a diff) and the *names*
-of environment variables/headers, never their values.
+The pin file is meant to be reviewed and committed. It stores hashes, the
+approved tool definitions (to show diffs) and the *names* of environment
+variables and headers, never their values.
 """
 
 from __future__ import annotations
@@ -37,19 +36,22 @@ ENV_PIN_PATH = "MCP_SCANNER_PINS"
 
 
 class PinError(Exception):
-    pass
+    """The pin file cannot be read or has an unsupported format."""
 
 
 def default_pin_path() -> Path:
+    """Return ``$MCP_SCANNER_PINS`` if set, else ``~/.mcp-scanner/pins.json``."""
     override = os.environ.get(ENV_PIN_PATH)
     return Path(override) if override else Path.home() / ".mcp-scanner" / "pins.json"
 
 
 def canonical_json(value: Any) -> bytes:
+    """Serialize ``value`` deterministically (sorted keys, no whitespace, UTF-8)."""
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
 
 
 def sha256_of(value: Any) -> str:
+    """Return the hex SHA-256 of the canonical JSON form of ``value``."""
     return hashlib.sha256(canonical_json(value)).hexdigest()
 
 
@@ -65,7 +67,7 @@ def tool_digests(tool: ToolDefinition) -> dict[str, str]:
 
 
 def launch_components(server: ServerConfig) -> dict[str, str]:
-    """Per-component hashes; values of env vars and headers are excluded."""
+    """Hash each launch component; only the names of env vars and headers are included."""
     return {
         "transport": sha256_of(server.transport),
         "command": sha256_of(server.command),
@@ -87,7 +89,7 @@ def launch_record(server: ServerConfig) -> dict[str, Any]:
 
 
 def text_diff(old: str, new: str, limit: int = 4) -> str:
-    """Compact word-level diff, sanitized for display."""
+    """Return a compact word-level diff, sanitized for display."""
     old_tokens = re.split(r"(\s+)", old)
     new_tokens = re.split(r"(\s+)", new)
     opcodes = difflib.SequenceMatcher(None, old_tokens, new_tokens, autojunk=False).get_opcodes()
@@ -128,12 +130,18 @@ def _pretty(value: Any) -> str:
 
 @dataclass
 class PinStore:
+    """Approved pins per server, as stored in the pin file."""
+
     path: Path
     servers: dict[str, dict[str, Any]] = field(default_factory=dict)
     exists: bool = False
 
     @classmethod
     def load(cls, path: str | Path) -> PinStore:
+        """Load the pin file, or return an empty store if it does not exist.
+
+        Raise :class:`PinError` if the file is unreadable or invalid.
+        """
         file_path = Path(path)
         if not file_path.exists():
             return cls(file_path)
@@ -156,6 +164,7 @@ class PinStore:
         }
 
     def save(self) -> None:
+        """Write the pin file atomically (temporary file, then rename)."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = json.dumps(self.to_json(), indent=2, ensure_ascii=False) + "\n"
         fd, tmp = tempfile.mkstemp(prefix=".pins-", suffix=".tmp", dir=self.path.parent)
@@ -216,7 +225,12 @@ def check_pins(
     frozen: bool = False,
     now: str | None = None,
 ) -> PinOutcome:
-    """Compare current state with the pin store (mutating it unless frozen)."""
+    """Compare the current servers and tools with ``store`` and report changes.
+
+    Unless ``frozen``, new servers and tools are pinned in ``store`` (in memory;
+    the caller saves it when ``outcome.dirty`` is set). ``update`` approves every
+    change.
+    """
     now = now or _now()
     mode = "update" if update else "frozen" if frozen else "tofu"
     outcome = PinOutcome(str(store.path), mode)
@@ -252,6 +266,7 @@ def check_pins(
             outcome.pinned_servers.append(name)
             mark_dirty()
 
+        # Launch configurations are pinned per client that defines the server.
         launch = entry.setdefault("launch", {})
         for config in configs:
             current = launch_record(config)
@@ -297,7 +312,8 @@ def check_pins(
             if frozen and not first_time:
                 report(
                     "MCPS402",
-                    f"Tools of server {name!r} have never been approved ({len(inv.tools)} tool(s))",
+                    f"Tools of server {name!r} have never been approved "
+                    f"({len(inv.tools)} tool(s))",
                     inv.locate(),
                     server=name,
                 )
@@ -375,6 +391,6 @@ def check_pins(
                     tool=tool_name,
                 )
 
-    if frozen:
+    if frozen:  # Frozen mode never writes the pin file.
         outcome.dirty = False
     return outcome

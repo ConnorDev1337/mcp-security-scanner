@@ -1,9 +1,8 @@
-"""Text helpers: safe display, normalization for matching, entropy, redaction.
+r"""Text helpers: safe display, normalization for matching, entropy and redaction.
 
-Everything the scanner prints comes from untrusted input, so evidence is
-always passed through :func:`sanitize` first. That keeps invisible characters
-visible (``\\u200b``) and stops ANSI escape sequences in a malicious tool
-description from re-styling or hiding parts of the scanner's own report.
+All displayed evidence comes from untrusted input and goes through
+:func:`sanitize`, which makes invisible characters visible (``\u200b``) and
+neutralizes ANSI escape sequences that could restyle or hide parts of the report.
 """
 
 from __future__ import annotations
@@ -13,8 +12,7 @@ import re
 import unicodedata
 from collections import Counter
 
-# Characters that render as nothing (or nearly nothing) but are not in the
-# Unicode "format" category, so they need to be listed explicitly.
+# Blank-rendering characters outside the Unicode format (Cf) category.
 INVISIBLE_EXTRA = frozenset(
     {
         0x034F,  # COMBINING GRAPHEME JOINER
@@ -37,7 +35,10 @@ def is_variation_selector(cp: int) -> bool:
 
 
 def is_hidden_char(ch: str) -> bool:
-    """True for characters that are invisible or control-like when rendered."""
+    """Return whether ``ch`` renders invisibly or acts as a control character.
+
+    Newline, tab and carriage return are not considered hidden.
+    """
     if ch in "\n\t\r":
         return False
     cp = ord(ch)
@@ -47,7 +48,7 @@ def is_hidden_char(ch: str) -> bool:
 
 
 def sanitize(text: str, limit: int = 200) -> str:
-    """Escape hidden/control characters and truncate, for safe display."""
+    """Escape hidden and control characters and truncate to ``limit`` for display."""
     out: list[str] = []
     for ch in text:
         if ch == "\n":
@@ -68,7 +69,7 @@ def sanitize(text: str, limit: int = 200) -> str:
 
 
 def snippet(text: str, start: int, end: int, context: int = 40, max_match: int = 120) -> str:
-    """Return the match with some surrounding context, sanitized."""
+    """Return ``text[start:end]`` with surrounding context, truncated and sanitized."""
     end = min(end, start + max_match)
     lo, hi = max(0, start - context), min(len(text), end + context)
     piece = text[lo:hi]
@@ -79,7 +80,7 @@ def snippet(text: str, start: int, end: int, context: int = 40, max_match: int =
 
 _CONFUSABLES = str.maketrans(
     {
-        # Cyrillic and Greek lookalikes commonly used to dodge keyword filters.
+        # Cyrillic/Greek homoglyphs and typographic quotes used to dodge keyword filters.
         "а": "a",
         "е": "e",
         "о": "o",
@@ -114,17 +115,18 @@ def strip_hidden(text: str) -> str:
 
 
 def normalize_for_matching(text: str) -> str:
-    """Canonical form used by keyword rules.
+    r"""Return the canonical form of ``text`` matched by keyword rules.
 
-    Removes invisible characters (so ``ig\\u200bnore`` still matches), applies
-    NFKC (fullwidth letters fold to ASCII), maps common homoglyphs, lowercases
-    and collapses whitespace.
+    Removes hidden characters (so ``ig\u200bnore`` still matches), applies NFKC
+    (fullwidth letters fold to ASCII), maps common homoglyphs, lowercases and
+    collapses whitespace.
     """
     text = unicodedata.normalize("NFKC", strip_hidden(text)).lower()
     return _WS.sub(" ", text.translate(_CONFUSABLES)).strip()
 
 
 def shannon_entropy(value: str) -> float:
+    """Return the Shannon entropy of ``value`` in bits per character."""
     if not value:
         return 0.0
     counts = Counter(value)
@@ -141,7 +143,10 @@ def redact(value: str, keep: int = 4) -> str:
 
 
 def word_parts(identifier: str) -> list[str]:
-    """Split ``snake_case``, ``kebab-case``, dotted and ``camelCase`` names."""
+    """Split a ``snake_case``, ``kebab-case``, dotted or ``camelCase`` name into words.
+
+    Words are returned in lowercase.
+    """
     words: list[str] = []
     for chunk in re.split(r"[_\-.\s/:]+", identifier):
         words.extend(re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+", chunk))

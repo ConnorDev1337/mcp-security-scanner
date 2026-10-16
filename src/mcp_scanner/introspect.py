@@ -1,18 +1,18 @@
 """Opt-in live enumeration of tools (``tools/list``) over stdio or Streamable HTTP.
 
-WARNING: introspecting a stdio server EXECUTES its configured command with
-your privileges. The scanner's static rules run on the configuration first,
-but only introspect servers you would be willing to run anyway, ideally inside
-a container or VM. Prefer offline manifests (``--tools``) when possible.
+WARNING: introspecting a stdio server EXECUTES its configured command with the
+caller's privileges. Only introspect servers you would run anyway, ideally in a
+container or VM, and prefer offline manifests (``--tools``).
 
-Hardening applied here:
+Hardening:
 
-* stdio servers get a minimal inherited environment (PATH, HOME, temp dirs...)
-  plus the variables from their own configuration, not your full environment;
+* stdio servers inherit only a minimal environment (PATH, HOME, temp dirs, ...)
+  plus the variables from their own configuration;
 * requests from the server (sampling, roots, elicitation) are refused;
-* HTTP redirects are not followed and plain ``http://`` is refused for
-  non-loopback hosts (configured headers often carry credentials);
-* every exchange is bounded by a single deadline and the process is killed.
+* HTTP redirects are not followed, and plain ``http://`` is refused for
+  non-loopback hosts because configured headers often carry credentials;
+* each session has a single deadline, and the server process tree is killed if
+  it does not exit on its own.
 """
 
 from __future__ import annotations
@@ -39,21 +39,48 @@ from .rules.config import is_loopback
 from .textutil import sanitize
 
 PROTOCOL_VERSION = "2025-06-18"
-MAX_PAGES = 100
-MAX_BODY = 32 * 1024 * 1024
+MAX_PAGES = 100  # Upper bound on tools/list pages per server.
+MAX_BODY = 32 * 1024 * 1024  # Maximum bytes read from a JSON (non-SSE) HTTP response.
+# Inherited variables needed to start a process; everything else must come from
+# the server's own configuration.
 SAFE_ENV_KEYS = frozenset(
     {
-        "PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "COMSPEC", "SYSTEMDRIVE", "TEMP", "TMP",
-        "TMPDIR", "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "APPDATA", "LOCALAPPDATA",
-        "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "LANG", "LC_ALL", "LC_CTYPE",
-        "TERM", "USER", "USERNAME", "LOGNAME", "SHELL", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME",
-        "XDG_CACHE_HOME", "XDG_DATA_HOME",
+        "PATH",
+        "PATHEXT",
+        "SYSTEMROOT",
+        "WINDIR",
+        "COMSPEC",
+        "SYSTEMDRIVE",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "HOME",
+        "USERPROFILE",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "PROGRAMDATA",
+        "PROGRAMFILES",
+        "PROGRAMFILES(X86)",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "TERM",
+        "USER",
+        "USERNAME",
+        "LOGNAME",
+        "SHELL",
+        "XDG_RUNTIME_DIR",
+        "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+        "XDG_DATA_HOME",
     }
-)  # fmt: skip
+)
 
 
 class IntrospectionError(Exception):
-    pass
+    """Live introspection of a server failed."""
 
 
 def _initialize_params() -> dict[str, Any]:
@@ -74,6 +101,10 @@ def _expand(value: str, environ: Mapping[str, str]) -> str:
 
 
 def build_env(server: ServerConfig, environ: Mapping[str, str]) -> dict[str, str]:
+    """Return the stdio server environment: safe inherited variables plus its own.
+
+    Raise :class:`IntrospectionError` if a configured value cannot be expanded.
+    """
     env = {k: v for k, v in environ.items() if k.upper() in SAFE_ENV_KEYS}
     for key, value in server.env.items():
         env[key] = _expand(value, environ)
@@ -83,6 +114,7 @@ def build_env(server: ServerConfig, environ: Mapping[str, str]) -> dict[str, str
 def _collect(
     request: Callable[[str, dict[str, Any]], dict[str, Any]], init: dict[str, Any]
 ) -> list[dict[str, Any]]:
+    """Fetch every ``tools/list`` page, unless the server does not advertise tools."""
     capabilities = init.get("capabilities")
     if isinstance(capabilities, dict) and "tools" not in capabilities:
         return []
@@ -117,6 +149,8 @@ def _inventory(server: ServerConfig, init: dict[str, Any], tools: list[dict]) ->
 
 
 class _StdioSession:
+    """Newline-delimited JSON-RPC session over a child process's stdin and stdout."""
+
     def __init__(self, proc: subprocess.Popen[bytes], deadline: float) -> None:
         self.proc = proc
         self.deadline = deadline
@@ -168,10 +202,10 @@ class _StdioSession:
             try:
                 message = json.loads(line)
             except ValueError:
-                continue  # stray log output on stdout
+                continue  # Non-JSON log output on stdout.
             if not isinstance(message, dict):
                 continue
-            if "method" in message and "id" in message:
+            if "method" in message and "id" in message:  # Server-initiated request.
                 self._refuse(message)
                 continue
             if message.get("id") != request_id:
@@ -185,6 +219,7 @@ class _StdioSession:
             return result
 
     def _refuse(self, message: dict[str, Any]) -> None:
+        """Answer pings and refuse every other server-initiated request."""
         if message.get("method") == "ping":
             self.send({"jsonrpc": "2.0", "id": message["id"], "result": {}})
         else:
@@ -192,6 +227,7 @@ class _StdioSession:
             self.send({"jsonrpc": "2.0", "id": message["id"], "error": error})
 
     def close(self) -> None:
+        """Close stdin, then kill the process tree if the server does not exit."""
         try:
             if self.proc.stdin:
                 self.proc.stdin.close()
@@ -227,8 +263,10 @@ def _introspect_stdio(
     env = build_env(server, environ)
     command = _expand(server.command, environ)
     args = [_expand(a, environ) for a in server.args]
+    # Resolve against the server's PATH; on Windows this also finds .cmd/.bat shims.
     executable = shutil.which(command, path=env.get("PATH")) or command
     cwd = _expand(server.cwd, environ) if server.cwd else None
+    # A separate process group/session lets close() kill the whole process tree.
     kwargs: dict[str, Any] = {}
     if os.name == "nt":
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
@@ -260,11 +298,15 @@ def _introspect_stdio(
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects so configured credentials are never sent to another URL."""
+
     def redirect_request(self, *args: Any, **kwargs: Any) -> None:
-        return None  # urllib then raises HTTPError for the 3xx response
+        return None  # urllib then raises HTTPError for the 3xx response.
 
 
 class _HttpSession:
+    """Streamable HTTP session: JSON-RPC over POST, answered with JSON or SSE."""
+
     def __init__(self, url: str, headers: dict[str, str], deadline: float) -> None:
         self.url = url
         self.headers = headers
@@ -289,7 +331,12 @@ class _HttpSession:
         if self.protocol:
             headers["MCP-Protocol-Version"] = self.protocol
         data = json.dumps(payload).encode("utf-8") if payload is not None else None
-        request = urllib.request.Request(self.url, data=data, headers=headers, method=method)  # noqa: S310
+        request = urllib.request.Request(  # noqa: S310 - scheme checked by _introspect_http
+            self.url,
+            data=data,
+            headers=headers,
+            method=method,
+        )
         try:
             response = self.opener.open(request, timeout=self._remaining(what))
         except urllib.error.HTTPError as exc:
@@ -331,6 +378,7 @@ class _HttpSession:
         return result
 
     def _read_sse(self, response: Any, request_id: int, what: str) -> dict[str, Any] | None:
+        """Return the message answering ``request_id`` from an SSE stream, if any."""
         data: list[str] = []
         for raw in response:
             self._remaining(what)
@@ -348,6 +396,7 @@ class _HttpSession:
         return None
 
     def close(self) -> None:
+        """Terminate the server-side session, if any (best effort)."""
         if not self.session_id:
             return
         try:
@@ -386,6 +435,12 @@ def _introspect_http(
 def introspect(
     server: ServerConfig, timeout: float = 20.0, environ: Mapping[str, str] | None = None
 ) -> ServerInventory:
+    """Fetch the tool inventory of ``server``; stdio servers are executed.
+
+    Variables in the configuration are expanded from ``environ`` (default:
+    ``os.environ``). Raise :class:`IntrospectionError` on any failure, including
+    unsupported transports.
+    """
     environ = os.environ if environ is None else environ
     if server.transport == "stdio":
         return _introspect_stdio(server, timeout, environ)

@@ -77,7 +77,8 @@ _NOT_SECRET_KEY = re.compile(
     r"timeout|mode|type|enabled|header|length|count|max|min|size)$"
 )
 _SENSITIVE_HEADER = re.compile(
-    r"(?i)^(?:authorization|proxy-authorization|cookie|x-[\w-]*(?:key|token|secret|auth)[\w-]*|[\w-]*api[-_]?key)$"
+    r"(?i)^(?:authorization|proxy-authorization|cookie|"
+    r"x-[\w-]*(?:key|token|secret|auth)[\w-]*|[\w-]*api[-_]?key)$"
 )
 _AUTH_SCHEME = re.compile(r"(?i)^(?:bearer|basic|token|apikey|api-key)\s+")
 _CRED_FLAG = re.compile(
@@ -93,11 +94,16 @@ _ENV_ASSIGNMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.+)$")
 
 
 def is_reference(value: str) -> bool:
-    """``${VAR}``, ``$VAR``, ``%VAR%``, ``{{x}}``, ``<x>``: not a literal secret."""
+    """Return whether ``value`` is a reference rather than a literal secret.
+
+    References are ``${VAR}`` anywhere in the value, or a whole value of the form
+    ``$VAR``, ``%VAR%``, ``{{x}}`` or ``<x>``.
+    """
     return bool(_REFERENCE.search(value.strip()))
 
 
 def is_placeholder(value: str) -> bool:
+    """Return whether ``value`` is empty or an obvious placeholder (``changeme``, ``xxxx``)."""
     v = value.strip().strip("'\"")
     return not v or bool(_PLACEHOLDER.match(v)) or bool(_PLACEHOLDER_PART.search(v))
 
@@ -109,6 +115,7 @@ def _looks_like_path(value: str) -> bool:
 
 
 def looks_secret(value: str) -> bool:
+    """Return whether a literal value looks like a credential (by length and entropy)."""
     v = value.strip()
     if len(v) < 8 or is_reference(v) or is_placeholder(v):
         return False
@@ -120,7 +127,7 @@ def looks_secret(value: str) -> bool:
 
 
 def find_known_secrets(text: str) -> list[tuple[SecretPattern, str]]:
-    """Return ``(pattern, value)`` for provider-format secrets in ``text``."""
+    """Return non-overlapping ``(pattern, value)`` matches of provider-format secrets."""
     found: list[tuple[SecretPattern, str]] = []
     taken: list[tuple[int, int]] = []
     for pattern in KNOWN_SECRETS:
@@ -139,7 +146,7 @@ def find_known_secrets(text: str) -> list[tuple[SecretPattern, str]]:
 
 
 def url_credentials(url: str) -> list[str]:
-    """Describe credentials embedded in a URL (already redacted)."""
+    """Return redacted descriptions of the credentials embedded in ``url``."""
     try:
         parts = urlsplit(url)
     except ValueError:
@@ -180,7 +187,7 @@ def mask(text: str) -> str:
 
 
 def mask_args(args: list[str]) -> list[str]:
-    """Copy of a command line that is safe to put in reports."""
+    """Return a copy of a command line with credential values redacted for reports."""
     masked: list[str] = []
     for index, arg in enumerate(args):
         if arg.startswith("-") and "=" in arg:
@@ -275,7 +282,7 @@ def check_server(server: ServerConfig) -> Iterator[Finding]:
         elif index > 0 and _CRED_FLAG.match(args[index - 1]):
             key = args[index - 1]
         else:
-            assignment = _ENV_ASSIGNMENT.match(arg)  # e.g. docker -e TOKEN=...
+            assignment = _ENV_ASSIGNMENT.match(arg)  # KEY=value, as in docker -e TOKEN=...
             if assignment and _sensitive_key(assignment.group(1)):
                 key, value = assignment.group(1), assignment.group(2)
         yield from _value_findings(server, ("args", index), f"args[{index}]", key, value, where)

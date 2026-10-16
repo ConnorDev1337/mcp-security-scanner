@@ -1,4 +1,4 @@
-"""MCPS120-MCPS122: invisible Unicode, control characters, confusable names."""
+"""MCPS120-MCPS122: invisible Unicode, control characters and confusable names."""
 
 from __future__ import annotations
 
@@ -7,7 +7,13 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 
 from ..models import Finding, ServerConfig, Severity
-from ..textutil import INVISIBLE_EXTRA, is_hidden_char, is_tag_char, is_variation_selector, sanitize
+from ..textutil import (
+    INVISIBLE_EXTRA,
+    is_hidden_char,
+    is_tag_char,
+    is_variation_selector,
+    sanitize,
+)
 from .catalog import get
 
 BIDI_CONTROLS = frozenset({0x061C, 0x200E, 0x200F, *range(0x202A, 0x202F), *range(0x2066, 0x206A)})
@@ -36,17 +42,22 @@ class UnicodeIssue:
 
 
 def _joiner_is_legit(text: str, index: int) -> bool:
-    """ZWJ/ZWNJ are legitimate inside emoji sequences and some scripts."""
+    """Return whether the ZWJ/ZWNJ at ``index`` sits between two non-ASCII characters.
+
+    Joiners are legitimate inside emoji sequences and some scripts.
+    """
     if index == 0 or index + 1 >= len(text):
         return False
     return ord(text[index - 1]) > 0x7F and ord(text[index + 1]) > 0x7F
 
 
 def _decode_tags(codepoints: list[int]) -> str:
+    """Map Unicode tag characters back to the ASCII characters they mirror."""
     return "".join(chr(cp - 0xE0000) for cp in codepoints if 0xE0020 <= cp <= 0xE007E)
 
 
 def _decode_selectors(run: list[int]) -> str:
+    """Decode a run of variation selectors, one byte per selector, as UTF-8."""
     data = bytes(cp - 0xFE00 if cp <= 0xFE0F else cp - 0xE0100 + 16 for cp in run)
     return data.decode("utf-8", errors="replace")
 
@@ -56,6 +67,7 @@ def _readable(text: str) -> bool:
 
 
 def analyze_text(text: str) -> list[UnicodeIssue]:
+    """Return the hidden-character issues in ``text``, grouped by kind."""
     tags: list[int] = []
     bidi: list[int] = []
     zero: list[int] = []
@@ -70,7 +82,7 @@ def analyze_text(text: str) -> list[UnicodeIssue]:
         if is_variation_selector(cp):
             run.append(cp)
             continue
-        if len(run) >= 2:  # a single selector is normal (emoji presentation)
+        if len(run) >= 2:  # A single selector is normal (emoji presentation).
             selector_runs.append(run)
         run = []
         if is_tag_char(cp):
@@ -136,6 +148,7 @@ def analyze_text(text: str) -> list[UnicodeIssue]:
 
 
 def _script(ch: str) -> str:
+    """Approximate the script of ``ch`` by the first word of its Unicode name."""
     try:
         return unicodedata.name(ch).split()[0]
     except ValueError:
@@ -143,7 +156,7 @@ def _script(ch: str) -> str:
 
 
 def identifier_issue(name: str) -> tuple[Severity, str] | None:
-    """Return ``(severity, explanation)`` for non-ASCII or mixed-script names."""
+    """Return ``(severity, explanation)`` for a non-ASCII or mixed-script name, else None."""
     visible = [ch for ch in name if ord(ch) > 0x7F and not is_hidden_char(ch)]
     if not visible:
         return None

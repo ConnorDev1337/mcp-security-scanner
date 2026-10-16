@@ -1,4 +1,4 @@
-"""MCPS211-MCPS213: what a tool can do, judged from its definition."""
+"""MCPS211-MCPS213: high-impact tool capabilities inferred from tool definitions."""
 
 from __future__ import annotations
 
@@ -9,31 +9,123 @@ from ..models import Finding, ServerInventory, Severity, ToolDefinition
 from ..textutil import normalize_for_matching, word_parts
 from .catalog import get
 
+# Words of a tool name (as split by word_parts) that reveal what the tool can do.
 EXEC_WORDS = frozenset(
-    {"exec", "execute", "shell", "bash", "sh", "zsh", "cmd", "powershell", "pwsh", "terminal",
-     "eval", "subprocess", "spawn", "repl"}
-)  # fmt: skip
+    {
+        "exec",
+        "execute",
+        "shell",
+        "bash",
+        "sh",
+        "zsh",
+        "cmd",
+        "powershell",
+        "pwsh",
+        "terminal",
+        "eval",
+        "subprocess",
+        "spawn",
+        "repl",
+    }
+)
 RUN_OBJECTS = frozenset(
-    {"command", "commands", "cmd", "script", "scripts", "code", "shell", "process", "program",
-     "python", "javascript", "js", "sql"}
-)  # fmt: skip
+    {
+        "command",
+        "commands",
+        "cmd",
+        "script",
+        "scripts",
+        "code",
+        "shell",
+        "process",
+        "program",
+        "python",
+        "javascript",
+        "js",
+        "sql",
+    }
+)
 DESTRUCTIVE_WORDS = frozenset(
-    {"delete", "remove", "rm", "unlink", "rmdir", "drop", "destroy", "truncate", "wipe", "purge",
-     "erase", "overwrite", "kill", "terminate", "uninstall"}
-)  # fmt: skip
+    {
+        "delete",
+        "remove",
+        "rm",
+        "unlink",
+        "rmdir",
+        "drop",
+        "destroy",
+        "truncate",
+        "wipe",
+        "purge",
+        "erase",
+        "overwrite",
+        "kill",
+        "terminate",
+        "uninstall",
+    }
+)
 FINANCIAL_WORDS = frozenset(
-    {"transfer", "payment", "payments", "pay", "withdraw", "withdrawal", "refund", "charge",
-     "purchase", "checkout", "trade"}
-)  # fmt: skip
+    {
+        "transfer",
+        "payment",
+        "payments",
+        "pay",
+        "withdraw",
+        "withdrawal",
+        "refund",
+        "charge",
+        "purchase",
+        "checkout",
+        "trade",
+    }
+)
 WRITE_WORDS = frozenset(
-    {"write", "edit", "create", "update", "modify", "move", "rename", "upload", "push", "commit",
-     "merge", "deploy", "publish", "patch", "append", "insert", "send", "set", "save", "replace"}
-)  # fmt: skip
+    {
+        "write",
+        "edit",
+        "create",
+        "update",
+        "modify",
+        "move",
+        "rename",
+        "upload",
+        "push",
+        "commit",
+        "merge",
+        "deploy",
+        "publish",
+        "patch",
+        "append",
+        "insert",
+        "send",
+        "set",
+        "save",
+        "replace",
+    }
+)
+# Parameter names that usually carry code or commands.
 CODE_PARAMS = frozenset(
-    {"command", "cmd", "commands", "shell_command", "shellcommand", "script", "code",
-     "source_code", "sourcecode", "sql", "expression", "eval", "javascript", "js", "python",
-     "bash", "powershell", "statement"}
-)  # fmt: skip
+    {
+        "command",
+        "cmd",
+        "commands",
+        "shell_command",
+        "shellcommand",
+        "script",
+        "code",
+        "source_code",
+        "sourcecode",
+        "sql",
+        "expression",
+        "eval",
+        "javascript",
+        "js",
+        "python",
+        "bash",
+        "powershell",
+        "statement",
+    }
+)
 
 _EXEC_DESCRIPTION = re.compile(
     r"\b(?:execute|executes|run|runs|evaluate|evaluates)\b[^.]{0,30}?"
@@ -49,6 +141,7 @@ _LABELS = {
 
 
 def classify_name(name: str) -> str | None:
+    """Return ``"exec"``, ``"destructive"``, ``"financial"`` or None for a tool name."""
     words = set(word_parts(name))
     if (
         words & EXEC_WORDS
@@ -64,7 +157,7 @@ def classify_name(name: str) -> str | None:
 
 
 def classify_tool(tool: ToolDefinition) -> tuple[str, str] | None:
-    """Return ``(capability, reason)`` or ``None``."""
+    """Return ``(capability, reason)`` judged from the name, then the description, or None."""
     by_name = classify_name(tool.name)
     if by_name:
         return by_name, f"name {tool.name!r}"
