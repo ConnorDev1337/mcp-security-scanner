@@ -82,9 +82,16 @@ def render(
     lines = [f"{TOOL_NAME} {__version__}"]
 
     sources = sorted({display_path(s.source.path, root) for s in report.servers if s.source})
+    features = [
+        (report.prompt_count, "prompt(s)"),
+        (report.resource_count, "resource(s)"),
+        (report.resource_template_count, "resource template(s)"),
+    ]
+    extra = "".join(f", {count} {label}" for count, label in features if count)
     lines.append(
         f"Scanned {len(report.servers)} server(s) from {len(sources)} config file(s); "
-        f"{report.tool_count} tool definition(s) from {len(report.inventories)} inventory(ies)."
+        f"{report.tool_count} tool definition(s){extra} from "
+        f"{len(report.inventories)} inventory(ies)."
     )
     for source in sources:
         lines.append(f"  - {source}")
@@ -119,6 +126,10 @@ def render(
             detail.append(f"{len(pins.pinned_servers)} server(s) pinned on first use")
         if pins.pinned_tools:
             detail.append(f"{pins.pinned_tools} tool(s) pinned")
+        if pins.pinned_prompts:
+            detail.append(f"{pins.pinned_prompts} prompt(s) pinned")
+        if pins.pinned_resources:
+            detail.append(f"{pins.pinned_resources} resource(s) and template(s) pinned")
         if pins.approved_changes:
             detail.append(f"{pins.approved_changes} change(s) approved")
         suffix = f": {', '.join(detail)}" if detail else ""

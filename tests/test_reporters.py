@@ -34,7 +34,10 @@ def report(fixtures, write_json):
     )
     options = ScanOptions(
         configs=[str(fixtures / "configs" / "insecure.json"), str(secret_cfg)],
-        tool_manifests=[str(fixtures / "tools" / "poisoned.json")],
+        tool_manifests=[
+            str(fixtures / "tools" / "poisoned.json"),
+            str(fixtures / "tools" / "poisoned_prompts.json"),
+        ],
     )
     return run_scan(options)
 
@@ -86,7 +89,7 @@ def test_json_report_structure(report):
     summary = payload["summary"]
     assert summary["findings"] == len(payload["findings"]) == len(report.findings)
     assert sum(summary["by_severity"].values()) == summary["findings"]
-    assert summary["manifest_only_servers"] == ["evil-math", "mailer"]
+    assert summary["manifest_only_servers"] == ["bank", "evil-math", "mailer", "notes"]
     leaky = next(s for s in payload["servers"] if s["name"] == "leaky")
     assert leaky["env_keys"] == ["GITHUB_TOKEN"]
     assert leaky["args"][-1] == "ghp_****(40 chars)"
@@ -143,3 +146,51 @@ def test_mask_helpers():
         "A_SECRET=****",
         "-v",
     ]
+
+
+def test_prompt_and_resource_findings_in_every_format(report, fixtures):
+    root = fixtures.parent.parent
+    run = sarif.build(report, root=root)["runs"][0]
+    jsonschema.validate(sarif.build(report, root=root), SCHEMA)
+    rule_ids = {rule["id"] for rule in run["tool"]["driver"]["rules"]}
+    assert {"MCPS214", "MCPS406", "MCPS407", "MCPS408", "MCPS409"} <= rule_ids
+    result = next(r for r in run["results"] if r["ruleId"] == "MCPS214")
+    assert result["properties"]["resource"].startswith("file:///")
+    assert result["properties"]["tool"] is None
+    logical = result["locations"][0]["logicalLocations"][0]
+    assert logical["name"] == result["properties"]["resource"]
+    assert logical["fullyQualifiedName"] == f"notes/resource:{logical['name']}"
+    prompt = next(r for r in run["results"] if r["properties"]["prompt"] == "summarize")
+    assert prompt["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] == (
+        "tests/fixtures/tools/poisoned_prompts.json"
+    )
+
+    payload = json.loads(json_report.render(report))
+    assert payload["summary"]["prompts"] == 4
+    assert payload["summary"]["resources"] == 4
+    assert payload["summary"]["resource_templates"] == 3
+    notes = next(i for i in payload["inventories"] if i["server"] == "notes")
+    assert notes["prompts"][0] == "summarize"
+    mailer = next(i for i in payload["inventories"] if i["server"] == "mailer")
+    assert mailer["prompts"] is None and mailer["resources"] is None
+    finding = next(f for f in payload["findings"] if f["prompt"] == "translate")
+    assert finding["tool"] is None and finding["field"] == "arguments.0.description"
+
+    text = table.render(report, width=120)
+    assert "4 prompt(s), 4 resource(s), 3 resource template(s)" in text
+    assert "notes/prompt:summarize" in text
+
+
+def test_json_report_server_counts_prompts_and_resources(write_json, fixtures):
+    script = str(fixtures / "fake_mcp_server.py")
+    config = write_json(
+        "cfg.json",
+        {"mcpServers": {"fake": {"command": "python", "args": [script, "features"]}}},
+    )
+    tools = write_json(
+        "tools.json",
+        {"servers": {"fake": {"tools": [], "prompts": [{"name": "p"}], "resources": []}}},
+    )
+    report = run_scan(ScanOptions(configs=[str(config)], tool_manifests=[str(tools)]))
+    (server,) = json.loads(json_report.render(report))["servers"]
+    assert (server["tools"], server["prompts"], server["resources"]) == (0, 1, 0)

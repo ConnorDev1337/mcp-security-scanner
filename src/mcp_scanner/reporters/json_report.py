@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from .. import TOOL_NAME, __version__
-from ..models import Finding, Severity
+from ..models import Finding, ResourceDefinition, ServerInventory, Severity
+from ..rules.resources import resource_key
 from ..rules.secrets import mask, mask_args
 from ..scanner import ScanReport
 from . import display_path
@@ -26,6 +27,8 @@ def _finding(finding: Finding, root: Path) -> dict[str, Any]:
         "message": finding.message,
         "server": finding.server,
         "tool": finding.tool,
+        "prompt": finding.prompt,
+        "resource": finding.resource,
         "field": finding.field,
         "evidence": finding.evidence,
         "location": {
@@ -36,6 +39,22 @@ def _finding(finding: Finding, root: Path) -> dict[str, Any]:
         },
         "remediation": finding.rule.remediation,
         "fingerprint": finding.fingerprint(),
+    }
+
+
+def _keys(resources: list[ResourceDefinition] | None) -> list[str] | None:
+    return None if resources is None else [resource_key(r) for r in resources]
+
+
+def _inventory(inv: ServerInventory) -> dict[str, Any]:
+    """Summarize an inventory; None marks kinds that were not collected."""
+    return {
+        "server": inv.server,
+        "origin": inv.origin,
+        "tools": [t.name for t in inv.tools],
+        "prompts": None if inv.prompts is None else [p.name for p in inv.prompts],
+        "resources": _keys(inv.resources),
+        "resource_templates": _keys(inv.resource_templates),
     }
 
 
@@ -64,14 +83,15 @@ def build(
                 "source": display_path(location.path, root) if location.path else None,
                 "line": location.line,
                 "tools": len(inventory.tools) if inventory else None,
+                "prompts": len(inventory.prompts)
+                if inventory and inventory.prompts is not None
+                else None,
+                "resources": len(inventory.all_resources()) if inventory else None,
                 "tools_origin": inventory.origin if inventory else None,
             }
         )
     configured = {s.name for s in report.servers}
-    inventories = [
-        {"server": inv.server, "origin": inv.origin, "tools": [t.name for t in inv.tools]}
-        for inv in report.inventories
-    ]
+    inventories = [_inventory(inv) for inv in report.inventories]
     pins = None
     if report.pins:
         pins = {
@@ -79,6 +99,8 @@ def build(
             "mode": report.pins.mode,
             "pinned_servers": report.pins.pinned_servers,
             "pinned_tools": report.pins.pinned_tools,
+            "pinned_prompts": report.pins.pinned_prompts,
+            "pinned_resources": report.pins.pinned_resources,
             "approved_changes": report.pins.approved_changes,
         }
     return {
@@ -92,6 +114,9 @@ def build(
                 inv.server for inv in report.inventories if inv.server not in configured
             ),
             "tools": report.tool_count,
+            "prompts": report.prompt_count,
+            "resources": report.resource_count,
+            "resource_templates": report.resource_template_count,
             "findings": len(findings),
             "by_severity": report.counts(findings),
         },
