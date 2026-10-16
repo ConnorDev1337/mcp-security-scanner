@@ -28,15 +28,17 @@ SEVERITIES = [s.label for s in sorted(Severity, reverse=True)]
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mcp-scanner",
-        description="Defensive static scanner for MCP client configurations and tool definitions.",
+        description="Defensive static scanner for MCP client configurations and the tool, "
+        "prompt and resource definitions of MCP servers.",
     )
     parser.add_argument("--version", action="version", version=f"{TOOL_NAME} {__version__}")
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
 
     scan = sub.add_parser(
         "scan",
-        help="scan MCP configs and tool definitions",
-        description="Scan MCP client configuration files and tool definitions for risks. "
+        help="scan MCP configs and tool, prompt and resource definitions",
+        description="Scan MCP client configuration files and tool, prompt and resource "
+        "definitions for risks. "
         "Without CONFIG or --tools, well-known client config locations are discovered.",
     )
     scan.add_argument("configs", nargs="*", metavar="CONFIG", help="MCP client config file(s)")
@@ -49,16 +51,22 @@ def _parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         metavar="[NAME=]FILE",
-        help="tool definitions captured offline (tools/list result or multi-server dump)",
+        help="definitions captured offline (tools/list result or multi-server dump with "
+        "optional prompts, resources and resourceTemplates)",
     )
     scan.add_argument(
         "--introspect",
         action="store_true",
-        help="fetch tools/list from each configured server. WARNING: this EXECUTES stdio "
-        "server commands; run it in a sandbox",
+        help="list the tools, prompts and resources of each configured server (metadata "
+        "only; resources are never read). WARNING: this EXECUTES stdio server commands; run "
+        "it in a sandbox",
     )
     scan.add_argument("--timeout", type=float, default=20.0, help="introspection timeout (s)")
-    scan.add_argument("--dump-tools", metavar="FILE", help="save collected tool definitions")
+    scan.add_argument(
+        "--dump-tools",
+        metavar="FILE",
+        help="save collected tool, prompt and resource definitions (re-loadable with --tools)",
+    )
 
     pins = scan.add_argument_group("hash pinning")
     pins.add_argument(

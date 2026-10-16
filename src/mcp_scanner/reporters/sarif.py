@@ -94,9 +94,8 @@ def _result(finding: Finding, index: dict[str, int], root: Path) -> dict[str, An
     if physical:
         location["physicalLocation"] = physical
     if finding.server:
-        location["logicalLocations"] = [
-            {"name": finding.tool or finding.server, "fullyQualifiedName": finding.target}
-        ]
+        name = finding.tool or finding.prompt or finding.resource or finding.server
+        location["logicalLocations"] = [{"name": name, "fullyQualifiedName": finding.target}]
     result: dict[str, Any] = {
         "ruleId": finding.rule.id,
         "ruleIndex": index[finding.rule.id],
@@ -107,6 +106,8 @@ def _result(finding: Finding, index: dict[str, int], root: Path) -> dict[str, An
             "severity": finding.severity.label,
             "server": finding.server,
             "tool": finding.tool,
+            "prompt": finding.prompt,
+            "resource": finding.resource,
             "field": finding.field,
         },
     }

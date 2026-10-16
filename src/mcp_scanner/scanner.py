@@ -47,6 +47,18 @@ class ScanReport:
     def tool_count(self) -> int:
         return sum(len(inv.tools) for inv in self.inventories)
 
+    @property
+    def prompt_count(self) -> int:
+        return sum(len(inv.prompts or ()) for inv in self.inventories)
+
+    @property
+    def resource_count(self) -> int:
+        return sum(len(inv.resources or ()) for inv in self.inventories)
+
+    @property
+    def resource_template_count(self) -> int:
+        return sum(len(inv.resource_templates or ()) for inv in self.inventories)
+
 
 def _now() -> str:
     return _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds")
