@@ -490,6 +490,10 @@ Everything it analyzes is untrusted input, so:
 - Pin-file masking covers what the secret rules recognize: provider token formats and URL
   credentials. A credential in another shape (a bare hex key in a description, "password: x")
   is stored and hashed as written. Tool, prompt and server names are stored as they are.
+- The keyed digest of a provider token is only as strong as the token. Real tokens are random, but
+  AWS access key IDs partly encode the account ID (they identify a key rather than authenticate
+  with it), and a hand-made value that happens to match a format (`sk-` plus 20 characters) could
+  be guessed from its digest if it is weak.
 - A change inside a masked URL password or query value that keeps its length is not detected by
   pinning (the text rules still scan the raw value on every run), and the pin file reveals that
   length. Launch components are hashed, not stored, but the hash covers literal arguments and URLs,
