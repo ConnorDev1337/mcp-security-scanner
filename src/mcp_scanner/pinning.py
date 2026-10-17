@@ -56,7 +56,7 @@ from .models import (
 from .rules.catalog import get
 from .rules.resources import resource_key
 from .rules.secrets import MaskedSpan, mask, mask_spans
-from .textutil import sanitize
+from .textutil import redact, sanitize
 
 PIN_VERSION = 3
 SUPPORTED_PIN_VERSIONS = frozenset({1, 2, 3})
@@ -563,6 +563,28 @@ def _migrate(store: PinStore) -> None:
             entry[kind.attr] = migrated
 
 
+def _stored_secrets_finding(store: PinStore, frozen: bool) -> Finding:
+    """Report the credentials found in clear text in the pin file (MCPS304)."""
+    stored = store.stored_secrets
+    targets = sorted({sanitize(item.target, 80) for item in stored})
+    where = ", ".join(targets[:3])
+    if len(targets) > 3:
+        where += f" and {len(targets) - 3} more"
+    if frozen:
+        action = "run once without --frozen-pins to rewrite it without them"
+    else:
+        action = "it was rewritten without them, but earlier copies still hold them"
+    values = sorted({f"{item.span.label} {redact(item.span.value)}" for item in stored})
+    evidence = "; ".join(values[:3]) + (f" (+{len(values) - 3} more)" if len(values) > 3 else "")
+    return Finding(
+        get("MCPS304"),
+        f"Pin file stores {len(stored)} credential(s) in clear text ({where}); {action}",
+        Location(path=str(store.path)),
+        evidence=evidence,
+        severity=max(item.span.severity for item in stored),
+    )
+
+
 def _inventory_summary(inv: ServerInventory) -> str:
     parts = [f"{len(inv.tools)} tool(s)"]
     for kind in _KINDS:
@@ -695,6 +717,11 @@ def check_pins(
 
     def mark_dirty() -> None:
         outcome.dirty = True
+
+    if store.stored_secrets:
+        # The records were masked when loading; writing the file removes the secrets.
+        outcome.findings.append(_stored_secrets_finding(store, frozen))
+        mark_dirty()
 
     for name in sorted(set(configs_by_name) | set(inventory_by_name)):
         configs = configs_by_name.get(name, [])

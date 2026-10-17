@@ -355,6 +355,20 @@ _RULES: tuple[Rule, ...] = (
         "in logs, proxies and error messages.",
         "Pass credentials in headers sourced from environment variables or a secret store.",
     ),
+    Rule(
+        "MCPS304",
+        "secret-in-pin-file",
+        "Credential stored in the pin file",
+        H,
+        "secrets",
+        "The pin file holds a credential in clear text. Pin files written before format 3 "
+        "stored tool definitions and server instructions verbatim, including any token or "
+        "URL password a server embedded in them, and pin files are meant to be committed. "
+        "The scanner rewrites the file without them unless --frozen-pins is set, but "
+        "earlier copies (git history, forks, CI caches) keep them.",
+        "Rotate the credentials, then commit the rewritten pin file (run once without "
+        "--frozen-pins). Removing them from git history does not undo the exposure.",
+    ),
     # ------------------------------------------------------------ integrity (pinning)
     Rule(
         "MCPS401",

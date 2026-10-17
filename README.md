@@ -177,6 +177,7 @@ and its data never reaches the scanner.
 | MCPS301 | critical | secrets | Hard-coded API token or private key |
 | MCPS302 | high | secrets | Hard-coded credential |
 | MCPS303 | high | secrets | Credentials embedded in URL |
+| MCPS304 | high | secrets | Credential stored in the pin file |
 | MCPS401 | high | integrity | Tool definition changed since approval |
 | MCPS402 | medium | integrity | Tool or server not in the approved pin set |
 | MCPS403 | low | integrity | Approved tool no longer present |
@@ -386,7 +387,7 @@ steps:
 | Excessive permissions and no human in the loop | MCPS206, MCPS209, MCPS211-213 |
 | Credentials or broad filesystem access published as resources | MCPS214, MCPS206 |
 | Insecure transport | MCPS207, MCPS208 |
-| Plaintext secrets | MCPS301-303 |
+| Plaintext secrets (including in the pin file) | MCPS301-304 |
 | Parser ambiguity (duplicate definitions) | MCPS001 |
 
 ### Attack surface of the scanner itself
