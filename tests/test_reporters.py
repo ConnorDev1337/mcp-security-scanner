@@ -181,16 +181,15 @@ def test_prompt_and_resource_findings_in_every_format(report, fixtures):
     assert "notes/prompt:summarize" in text
 
 
-def test_json_report_server_counts_prompts_and_resources(write_json, fixtures):
-    script = str(fixtures / "fake_mcp_server.py")
-    config = write_json(
-        "cfg.json",
-        {"mcpServers": {"fake": {"command": "python", "args": [script, "features"]}}},
-    )
-    tools = write_json(
-        "tools.json",
-        {"servers": {"fake": {"tools": [], "prompts": [{"name": "p"}], "resources": []}}},
-    )
+def test_json_report_server_counts_prompts_and_resources(write_json):
+    server = {"command": "srv-binary", "args": []}
+    config = write_json("cfg.json", {"mcpServers": {"new": server, "old": server, "none": server}})
+    entries = {
+        "new": {"tools": [], "prompts": [{"name": "p"}], "resources": []},
+        "old": {"tools": [{"name": "t"}]},
+    }
+    tools = write_json("tools.json", {"servers": entries})
     report = run_scan(ScanOptions(configs=[str(config)], tool_manifests=[str(tools)]))
-    (server,) = json.loads(json_report.render(report))["servers"]
-    assert (server["tools"], server["prompts"], server["resources"]) == (0, 1, 0)
+    servers = {s["name"]: s for s in json.loads(json_report.render(report))["servers"]}
+    counts = {name: (s["tools"], s["prompts"], s["resources"]) for name, s in servers.items()}
+    assert counts == {"new": (0, 1, 0), "old": (1, None, None), "none": (None, None, None)}
