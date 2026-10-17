@@ -249,6 +249,9 @@ def dump_inventories(inventories: list[ServerInventory], path: str | Path) -> No
         "generated_at": _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds"),
         "servers": {inv.server: _dump_entry(inv) for inv in inventories},
     }
+    # A lone surrogate is written as its JSON escape, which reads back as the same character.
     Path(path).write_text(
-        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+        errors="backslashreplace",
     )

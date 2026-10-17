@@ -77,8 +77,13 @@ def default_pin_path() -> Path:
 
 
 def canonical_json(value: Any) -> bytes:
-    """Serialize ``value`` deterministically (sorted keys, no whitespace, UTF-8)."""
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    """Serialize ``value`` deterministically (sorted keys, no whitespace, UTF-8).
+
+    Lone surrogates, which JSON escapes allow, are encoded as such ("surrogatepass")
+    instead of failing; every other string is plain UTF-8, as before.
+    """
+    text = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return text.encode("utf-8", "surrogatepass")
 
 
 def sha256_of(value: Any) -> str:
@@ -109,7 +114,8 @@ def _masked(value: Any, spans: list[MaskedSpan], *, legacy: bool = False) -> Any
 
 def _secret_marker(span: MaskedSpan, salt: bytes) -> str:
     if span.kind == "token":
-        digest = hmac.new(salt, _SECRET_TAG + span.value.encode(), hashlib.sha256).hexdigest()
+        value = span.value.encode("utf-8", "surrogatepass")
+        digest = hmac.new(salt, _SECRET_TAG + value, hashlib.sha256).hexdigest()
         return f"token:{digest}"
     return f"url:{len(span.value)}"
 
@@ -396,12 +402,16 @@ class PinStore:
         }
 
     def save(self) -> None:
-        """Write the pin file atomically (temporary file, then rename)."""
+        """Write the pin file atomically (temporary file, then rename).
+
+        A lone surrogate is written as its JSON escape, which reads back as the
+        same character.
+        """
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = json.dumps(self.to_json(), indent=2, ensure_ascii=False) + "\n"
         fd, tmp = tempfile.mkstemp(prefix=".pins-", suffix=".tmp", dir=self.path.parent)
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            with os.fdopen(fd, "w", encoding="utf-8", errors="backslashreplace") as handle:
                 handle.write(payload)
             os.replace(tmp, self.path)
         except BaseException:

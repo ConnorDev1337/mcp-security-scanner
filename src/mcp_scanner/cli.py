@@ -136,7 +136,8 @@ def _write(path: str, content: str) -> None:
     target = Path(path)
     if target.parent != Path():
         target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(content, encoding="utf-8")
+    # A lone surrogate, which only appears inside JSON strings, is written as its escape.
+    target.write_text(content, encoding="utf-8", errors="backslashreplace")
 
 
 def _render(fmt: str, report: ScanReport, args: argparse.Namespace, root: Path) -> str:

@@ -262,4 +262,6 @@ class Finding:
         if self.resource is not None:
             parts.append(f"resource:{self.resource}")
         parts.append(self.evidence or self.message)
-        return hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()[:32]
+        # surrogatepass: names read from JSON may hold lone surrogates ("\ud800").
+        data = "\x1f".join(parts).encode("utf-8", "surrogatepass")
+        return hashlib.sha256(data).hexdigest()[:32]
