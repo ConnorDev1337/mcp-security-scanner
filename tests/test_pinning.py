@@ -437,6 +437,8 @@ ANTHROPIC = "sk-ant-api03-" + _rand(40)
 PASSWORD = "Tr0ub4dor-3x"
 QUERY_KEY = "k3y-" + _rand(20)
 SAS_SIG = "Zm9v%2B" + _rand(20) + "%3D"
+KEY_BODY = _rand(64, string.ascii_letters + string.digits + "+/")
+PEM = f"-----BEGIN EC PRIVATE KEY-----\n{KEY_BODY}\n-----END EC PRIVATE KEY-----"
 
 
 def _schema(**prop):
@@ -471,6 +473,7 @@ SECRET_CASES = {
         {"description": f"Calls https://api.example.com/?api_key={QUERY_KEY}"},
         QUERY_KEY,
     ),
+    "private key": ({"inputSchema": _schema(default=PEM)}, KEY_BODY),
     "encoded URL query": (
         {"description": f"Reads https://acct.blob.core.windows.net/c/f?sv=1&sig={SAS_SIG}"},
         SAS_SIG,

@@ -90,6 +90,12 @@ _SENSITIVE_PARAM = re.compile(
     r"sig|signature|code|session|jwt)$"
 )
 _URL = re.compile(r"[A-Za-z][A-Za-z0-9+.\-]*://[^\s\"'<>]+")
+# A whole PEM private key: the header, the body (with legacy encryption headers) and the
+# footer, or the base64 that follows a header without footer.
+_PRIVATE_KEY_BLOCK = re.compile(
+    r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----"
+    r"(?:[A-Za-z0-9+/=\s:,.\-]*?-----END (?:[A-Z0-9]+ )*PRIVATE KEY-----|[A-Za-z0-9+/=\s]*)"
+)
 _ENV_ASSIGNMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.+)$")
 
 
@@ -231,12 +237,18 @@ def _mask_url(url: str, spans: list[MaskedSpan], legacy: bool) -> str:
 def mask_spans(text: str, *, legacy: bool = False) -> tuple[str, list[MaskedSpan]]:
     """Mask provider tokens and URL credentials; return the text and the masked values.
 
-    Values are listed in a deterministic order: provider tokens (by pattern, then
-    position), then URL credentials in order of appearance. Masking is idempotent.
+    Values are listed in a deterministic order: private key blocks, provider tokens
+    (by pattern, then position), then URL credentials in order of appearance. Masking
+    is idempotent.
     ``legacy`` reproduces the masking of format-2 pin files, which left
     percent-encoded query values in clear text; it only serves to verify those pins.
     """
     spans: list[MaskedSpan] = []
+    if not legacy:
+        # The provider pattern only matches the header; mask the key material too.
+        for block in _PRIVATE_KEY_BLOCK.findall(text):
+            spans.append(MaskedSpan("token", "Private key", block, Severity.CRITICAL))
+            text = text.replace(block, redact(block))
     for pattern, secret in find_known_secrets(text):
         spans.append(MaskedSpan("token", pattern.label, secret, pattern.severity))
         text = text.replace(secret, redact(secret))
