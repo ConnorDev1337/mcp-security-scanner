@@ -164,7 +164,7 @@ def test_arbitrary_text_raises_only_jsonloc_error(text):
     _check_error(text)
 
 
-@given(st.text(alphabet=st.sampled_from('{}[]:,"\\/*\n -0123456789.eE+truefalsn٣')))
+@given(st.text(alphabet=st.sampled_from('{}[]:,"\\/*\n -0123456789.eE+truefalsn\u0663')))
 def test_json_alphabet_soup_raises_only_jsonloc_error(text):
     _check_error(text)
 

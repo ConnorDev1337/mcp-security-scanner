@@ -137,15 +137,15 @@ UNICODE_TEXT = st.text(alphabet=st.characters(exclude_categories=()) | SPECIAL_C
 REGEX_FRAGMENTS = st.sampled_from(
     [
         "a", "A", "1", "_", "-", ".", "/", ":", "=", "+", "%", "&", "?", "#", "@", "~",
-        " ", "\n", "\t", " ", "\\", '"', "'", "<", ">", "{", "}", "(", ")", "|", "*",
+        " ", "\n", "\t", "\u00a0", "\\", '"', "'", "<", ">", "{", "}", "(", ")", "|", "*",
         "${", "$", "%A%", "{{", "}}", "<!--", "-->", "-----BEGIN PRIVATE" + " KEY-----",
         "-----END ", "://", "https://", "http://a:b@", "?token=", "&key=", "=****",
         "x-", "key", "token", "api", "apikey", "private", ".pem", "ghp_", "sk-", "sk-ant-",
         "xoxb-", "eyJ", "AKIA", "AccountKey=", "SG.", "glpat-", "hf_", "AA", ":AA",
         "ignore ", "previous ", "instructions", "the ", "tool ", "tools ", "read ",
         "secrets ", "send ", "curl ", "| sh", "whether ", "you ", "user ", "do not ",
-        "tell ", "<important>", "display:none", "display", "font-size", "​",
-        "\U000e0041", "️", "︁", "base64", "QUFB", "id_rsa", "/.ssh/", "%2F",
+        "tell ", "<important>", "display:none", "display", "font-size", "\u200b",
+        "\U000e0041", "\ufe0f", "\ufe01", "base64", "QUFB", "id_rsa", "/.ssh/", "%2F",
         "${input:", "${env:", "--token", "TOKEN=", "-r ", "iex ", "python -c",
     ]
 )  # fmt: skip
