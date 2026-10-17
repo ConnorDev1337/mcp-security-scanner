@@ -222,6 +222,26 @@ def test_module_entry_point(fixtures):
     assert "MCPS201" in result.stdout
 
 
+@pytest.mark.parametrize("fmt", ["table", "json", "sarif"])
+def test_redirected_output_uses_lf_line_endings(fixtures, fmt):
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "mcp_scanner",
+            "scan",
+            str(fixtures / "configs" / "benign.json"),
+            "--no-pins",
+            "--format",
+            fmt,
+        ],
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert b"\n" in result.stdout and b"\r" not in result.stdout
+
+
 def test_introspected_prompts_and_resources_roundtrip_through_dump(capsys, write_json, fixtures):
     script = str(fixtures / "fake_mcp_server.py")
     config = write_json(
@@ -285,3 +305,31 @@ def test_prompt_pinning_workflow(capsys, write_json, tmp_path):
     _, out, _ = run(capsys, *base, "--fail-on", "none", "-f", "table")
     assert "MCPS406" not in out
     assert "1 prompt(s)" in out
+
+
+def test_written_files_use_lf_line_endings(capsys, fixtures, tmp_path):
+    # Pin files, dumps and reports are meant to be committed: text mode wrote CRLF on
+    # Windows, so the same scan produced different bytes on each platform.
+    out = tmp_path / "out"
+    run(
+        capsys,
+        "scan",
+        str(fixtures / "configs" / "insecure.json"),
+        "-t",
+        str(fixtures / "tools" / "poisoned.json"),
+        "--pins",
+        str(out / "pins.json"),
+        "--dump-tools",
+        str(out / "dump.json"),
+        "--json",
+        str(out / "report.json"),
+        "--sarif",
+        str(out / "report.sarif"),
+        "-o",
+        str(out / "table.txt"),
+    )
+    written = sorted(path.name for path in out.iterdir())
+    assert written == ["dump.json", "pins.json", "report.json", "report.sarif", "table.txt"]
+    for path in out.iterdir():
+        data = path.read_bytes()
+        assert b"\n" in data and b"\r" not in data, path.name

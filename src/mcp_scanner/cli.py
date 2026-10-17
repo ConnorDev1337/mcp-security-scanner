@@ -136,8 +136,9 @@ def _write(path: str, content: str) -> None:
     target = Path(path)
     if target.parent != Path():
         target.parent.mkdir(parents=True, exist_ok=True)
-    # A lone surrogate, which only appears inside JSON strings, is written as its escape.
-    target.write_text(content, encoding="utf-8", errors="backslashreplace")
+    # LF on every platform, as reports may be committed; a lone surrogate, which only
+    # appears inside JSON strings, is written as its escape.
+    target.write_text(content, encoding="utf-8", errors="backslashreplace", newline="\n")
 
 
 def _render(fmt: str, report: ScanReport, args: argparse.Namespace, root: Path) -> str:
@@ -233,10 +234,11 @@ def _cmd_discover(_: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command line and return the process exit code."""
-    # Untrusted text must never crash output on consoles with a narrow encoding.
+    # Untrusted text must never crash output on consoles with a narrow encoding, and a
+    # report redirected to a file gets LF line endings, as with --output.
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
-            stream.reconfigure(errors="backslashreplace")
+            stream.reconfigure(errors="backslashreplace", newline="\n")
     parser = _parser()
     args = parser.parse_args(argv)
     if args.command == "scan":

@@ -563,6 +563,15 @@ def test_salt_is_stored_and_kept(tmp_path):
     assert json.loads(path.read_text(encoding="utf-8"))["salt"] == salt
 
 
+def test_pin_file_has_lf_line_endings(tmp_path):
+    # The file is committed: text mode wrote CRLF on Windows.
+    path = tmp_path / "pins.json"
+    _run(path, servers=[_cfg()], inventories=[_inv(TOOL)])
+    data = path.read_bytes()
+    assert data.count(b"\n") > 10 and b"\r" not in data
+    assert data.endswith(b"}\n")
+
+
 # --------------------------------------------------------------------------- migration
 
 

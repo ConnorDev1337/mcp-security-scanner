@@ -442,14 +442,17 @@ class PinStore:
     def save(self) -> None:
         """Write the pin file atomically (temporary file, then rename).
 
-        A lone surrogate is written as its JSON escape, which reads back as the
-        same character.
+        The file is meant to be committed, so it has LF line endings on every
+        platform. A lone surrogate is written as its JSON escape, which reads back
+        as the same character.
         """
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = json.dumps(self.to_json(), indent=2, ensure_ascii=False) + "\n"
         fd, tmp = tempfile.mkstemp(prefix=".pins-", suffix=".tmp", dir=self.path.parent)
         try:
-            with os.fdopen(fd, "w", encoding="utf-8", errors="backslashreplace") as handle:
+            with os.fdopen(
+                fd, "w", encoding="utf-8", errors="backslashreplace", newline="\n"
+            ) as handle:
                 handle.write(payload)
             os.replace(tmp, self.path)
         except BaseException:
