@@ -1,10 +1,11 @@
 # mcp-security-scanner
 
 A **defensive** scanner for [MCP (Model Context Protocol)](https://modelcontextprotocol.io)
-servers. It analyzes MCP client configuration and the tool definitions that servers expose, and
-flags risks **before** you connect them to an agent: hidden instructions for the model (*tool
-poisoning*), invisible Unicode characters, excessive permissions, plaintext secrets, and silent
-changes to tools you already approved (*rug pull*).
+servers. It analyzes MCP client configuration and the tools, prompts and resources that servers
+expose, and flags risks **before** you connect them to an agent: hidden instructions for the model
+(*tool poisoning*), invisible Unicode characters, excessive permissions, resources that publish
+credentials, plaintext secrets, and silent changes to definitions you already approved (*rug
+pull*).
 
 - No runtime dependencies (standard library only, Python ≥ 3.11).
 - **Executes nothing** by default: it only reads JSON/JSONC/TOML files.
@@ -94,24 +95,52 @@ The JSON parser is custom: it keeps the **line and column** of every key (for SA
 (comments and trailing commas) and detects **duplicate keys**, which `json.loads` silently drops (a
 reviewer may read the first definition while the client runs the last one).
 
-### 2. Tool definitions
+### 2. Tool, prompt and resource definitions
 
 Descriptions live on the server, not in the configuration. There are two ways to get them:
 
 - **Offline (recommended)**: `--tools [NAME=]FILE` accepts a `tools/list` result
   (`{"tools": [...]}`), a full JSON-RPC response, a JSON list, or the multi-server dump produced by
-  the scanner itself (`{"servers": {"name": {"instructions": ..., "tools": [...]}}}`).
+  the scanner itself. Next to `tools`, any of these shapes may carry the items of `prompts/list`,
+  `resources/list` and `resources/templates/list`:
+
+  ```json
+  {"servers": {"name": {"instructions": "...", "tools": [...], "prompts": [...],
+                        "resources": [...], "resourceTemplates": [...]}}}
+  ```
+
+  The new keys are optional: a manifest without them means "not collected" (older dumps keep
+  working and never look like a server that removed its prompts), while `"prompts": []` means
+  the server declares none.
 - **Live introspection (opt-in)**: `--introspect` performs `initialize` + `tools/list` over stdio
-  or Streamable HTTP. **It executes the server command**: only use it inside a container/VM and
-  with servers you would run anyway. Save the result with `--dump-tools` to rescan offline.
+  or Streamable HTTP, plus `prompts/list`, `resources/list` and `resources/templates/list`
+  (paginated) when the server advertises the `prompts` or `resources` capability. **It executes
+  the server command**: only use it inside a container/VM and with servers you would run anyway.
+  Save the result with `--dump-tools` to rescan offline (the dump includes prompts and resources).
   Hardening: minimal environment (only `PATH`, `HOME`, temp directories... plus the server's own
   variables, not your whole environment), server requests (*sampling*, *roots*) are refused, a
-  single global deadline, the process tree is killed, HTTP redirects are not followed, and
-  `http://` to non-local hosts is refused.
+  single global deadline for every request, the process tree is killed, HTTP redirects are not
+  followed, and `http://` to non-local hosts is refused. A failed prompt or resource listing does
+  not discard the tools: it becomes a warning and that kind is left out of the analysis and the
+  pins.
 
-**Every** text the model will read is scanned: title, description, parameter descriptions and
-titles (recursively through `properties`, `items`, `anyOf`, `$defs`...), `default`/`enum` values,
-`outputSchema`, annotations and the server `instructions`.
+**Metadata only.** The scanner never calls `resources/read` or `prompts/get`: resource contents
+and rendered prompt messages are not fetched, so reading a resource cannot trigger side effects
+and its data never reaches the scanner.
+
+**Every** text the model will read is scanned:
+
+- *Tools*: title, description, parameter descriptions and titles (recursively through
+  `properties`, `items`, `anyOf`, `$defs`...), `default`/`enum` values, `outputSchema`,
+  annotations and the server `instructions`.
+- *Prompts*: name, title, description, and the name, title and description of every argument.
+  Prompt templates reach the model when the user invokes them, so they carry the same poisoning
+  risk as tool descriptions.
+- *Resources and resource templates*: name, title, description and MIME type with the text rules;
+  the `uri`/`uriTemplate` with dedicated checks (invisible characters, embedded credentials,
+  sensitive local files, filesystem root or home directory). Hosts may attach resources to the
+  model context, so a server that lists `~/.ssh/id_rsa` as a resource can leak it without any tool
+  call.
 
 ## Rules
 
@@ -144,6 +173,7 @@ titles (recursively through `properties`, `items`, `anyOf`, `$defs`...), `defaul
 | MCPS211 | medium | permissions | High-impact tool capability |
 | MCPS212 | high | permissions | Tool annotations contradict tool behaviour |
 | MCPS213 | medium | permissions | Free-form code or command parameter |
+| MCPS214 | high | permissions | Resource points at sensitive local data |
 | MCPS301 | critical | secrets | Hard-coded API token or private key |
 | MCPS302 | high | secrets | Hard-coded credential |
 | MCPS303 | high | secrets | Credentials embedded in URL |
@@ -152,6 +182,15 @@ titles (recursively through `properties`, `items`, `anyOf`, `$defs`...), `defaul
 | MCPS403 | low | integrity | Approved tool no longer present |
 | MCPS404 | medium | integrity | Server launch configuration changed since approval |
 | MCPS405 | high | integrity | Server instructions changed since approval |
+| MCPS406 | high | integrity | Prompt definition changed since approval |
+| MCPS407 | high | integrity | Resource definition changed since approval |
+| MCPS408 | medium | integrity | Prompt or resource not in the approved pin set |
+| MCPS409 | low | integrity | Approved prompt or resource no longer present |
+
+Rules MCPS101-MCPS110 and MCPS120-MCPS122 apply to tools, prompts and resources alike (titles
+still say "tool" for historical reasons). Findings about a prompt or a resource name it as
+`server/prompt:NAME` or `server/resource:URI` in the table, and in the `prompt`/`resource` fields
+of JSON and SARIF.
 
 The default severity can be raised or lowered per finding (for example, `MCPS201` is *low* for a
 plain `cmd /c npx ...` and *high* when there is `&&`, `|` or inline code).
@@ -167,8 +206,15 @@ plain `cmd /c npx ...` and *high* when there is `&&`, `|` or inline code).
   hidden text is shown in the evidence and scanned again. The same applies to base64 blobs. ZWJ
   inside emoji and single variation selectors are not flagged.
 - *Cross-server shadowing*: besides patterns (*"when this tool is available, the send_email tool
-  must..."*), the scanner flags tools that mention tools of **another** server by name and tool
-  names exposed by two servers.
+  must..."*), the scanner flags tools, prompts and resources that mention tools of **another**
+  server by name, and tool names exposed by two servers.
+- *Resources*: URIs are percent-decoded before matching, so `file:///home/a/%2Essh/id_rsa` is still
+  an SSH key (`MCPS214`). Web URLs (`https://...`) are not treated as local paths, and `.env.example`
+  or `id_rsa.pub` are not secrets. A template exposes the filesystem root or a home directory
+  (`MCPS206`) when the expression follows the root/home prefix (`file:///{path}`,
+  `file:///home/alice/{+path}`), not when it ends in a fixed file name
+  (`file:///home/{user}/notes.txt`). Template expressions are not credentials (`?token={token}`).
+  Resources are identified by their URI with credentials masked, in reports and in the pin file.
 - *Permissions*: `env`, `sudo`, `cmd /c`, `sh -c` and `powershell -Command` are unwrapped (and
   `-EncodedCommand` is decoded) to analyze the real command; `npx`/`uvx`/`pipx`/`pnpm dlx`/
   `docker run`/`go run` are checked for exact versions or digests.
@@ -180,23 +226,45 @@ plain `cmd /c npx ...` and *high* when there is `&&`, `|` or inline code).
 
 ## Hash pinning
 
-Detects the *rug pull*: an approved tool that later changes its description.
+Detects the *rug pull*: an approved tool, prompt or resource that later changes its description.
 
 Each run computes the SHA-256 of the canonical definition of every tool (plus the description and
-the schema separately), of the server `instructions`, and of each component of the launch
-configuration (command, arguments, URL, **names** of environment variables and headers; never
-their values, so rotating a token is not a change).
+the schema separately), prompt, resource and resource template, of the server `instructions`, and
+of each component of the launch configuration (command, arguments, URL, **names** of environment
+variables and headers; never their values, so rotating a token is not a change).
 
 - **First time (TOFU)**: whatever is not in the pin file is pinned silently.
-- **Afterwards**: any change produces `MCPS401`/`MCPS405`/`MCPS404` with a **diff** of what
-  changed; new tools on an approved server raise `MCPS402`; removed tools raise `MCPS403`. Changes
-  are **not** re-pinned automatically: they keep being reported until they are approved.
+- **Afterwards**: any change produces `MCPS401`/`MCPS405`/`MCPS404` (tools, instructions, launch)
+  or `MCPS406`/`MCPS407` (prompts, resources and templates) with a **diff** of what changed; new
+  tools on an approved server raise `MCPS402` and new prompts or resources `MCPS408`; removed ones
+  raise `MCPS403`/`MCPS409`. Changes are **not** re-pinned automatically: they keep being
+  reported until they are approved.
 - `--update-pins` approves the current state. `--frozen-pins` (CI) never writes and reports
   anything that is not approved. `--no-pins` disables the feature.
+
+Prompts and resources:
+
+- Prompts are keyed by name; resources and templates by URI. A changed URI is therefore a new
+  resource (`MCPS408`) plus a removed one (`MCPS409`).
+- Resource lists are often dynamic (files, database rows), so a new concrete resource is reported
+  as *low*; new prompts and templates stay *medium*. `size` and `annotations.lastModified` follow
+  the content and are not pinned.
+- Definitions are hashed and stored with provider tokens and URL credentials masked, and
+  resources are keyed by their masked URI: the pin file never holds a credential embedded in a
+  prompt or resource, and rotating it is not a change.
+- A kind that was not collected (a manifest without `prompts`, a failed listing) keeps its
+  approved entries untouched instead of being reported as removed.
 
 Default file: `$MCP_SCANNER_PINS` or `~/.mcp-scanner/pins.json`; use `--pins` for another one. It
 stores hashes and the approved definition (for the diff), so it can be committed next to the
 project.
+
+**Pin file versions.** This version writes format `2` (adds `prompts`, `resources` and
+`resource_templates` per server) and still reads format `1`. With a format-1 file, the prompts and
+resources of already-approved servers are pinned on first use, or reported as `MCPS408` with
+`--frozen-pins` until you run `--update-pins` once; the file is rewritten as format 2 the next
+time it changes. Older scanners refuse format-2 files instead of silently ignoring the new
+entries.
 
 Recommended workflow in a repository:
 
@@ -232,9 +300,11 @@ mcp-scanner scan .mcp.json --tools mcp-tools.json --pins mcp-pins.json --frozen-
 Exit codes: `0` no findings at or above the threshold · `1` findings at or above the threshold ·
 `2` usage error or an input (config, manifest, pin file) could not be read.
 
-The JSON report (`schema: mcp-security-scanner/report/v1`) includes a summary by severity, servers
-(with masked arguments and URLs and only the *names* of environment variables), inventories,
-findings with location (`path`, `line`, `column`, JSON Pointer), remediation and fingerprint.
+The JSON report (`schema: mcp-security-scanner/report/v1`) includes a summary by severity and by
+kind (tools, prompts, resources, resource templates), servers (with masked arguments and URLs and
+only the *names* of environment variables), inventories (`null` for kinds that were not
+collected), findings with `server`/`tool`/`prompt`/`resource`, location (`path`, `line`,
+`column`, JSON Pointer), remediation and fingerprint.
 
 ## CI integration (GitLab and GitHub)
 
@@ -297,7 +367,7 @@ steps:
 
 | Adversary | Capability | Example |
 |---|---|---|
-| Author of a malicious server | Controls names, descriptions, schemas and `instructions` | Description with `<IMPORTANT>` asking to read `~/.ssh/id_rsa` |
+| Author of a malicious server | Controls names, descriptions, schemas, prompts, resources and `instructions` | Description with `<IMPORTANT>` asking to read `~/.ssh/id_rsa`; `~/.ssh/id_rsa` listed as a resource |
 | Compromised maintainer / *rug pull* | Changes an already approved server | New npm release with a poisoned description |
 | Malicious shared configuration | Controls the JSON the user copies | `bash -c "... \| sh"`, `NODE_OPTIONS=--require`, `docker.sock` |
 | Network attacker | Intercepts unencrypted traffic | Remote server over `http://` |
@@ -307,13 +377,14 @@ steps:
 
 | Threat | Rules |
 |---|---|
-| Hidden instructions in metadata (*tool poisoning*) | MCPS101-110, MCPS120-121 |
+| Hidden instructions in tool, prompt or resource metadata (*tool poisoning*) | MCPS101-110, MCPS120-121 |
 | Hiding actions from the user and exfiltration through arguments | MCPS103, MCPS104, MCPS105 |
 | Impersonating/altering other tools (*shadowing*) | MCPS106, MCPS122 |
-| Changes after approval (*rug pull*) | MCPS401-405 |
+| Changes after approval (*rug pull*) | MCPS401-409 |
 | Arbitrary execution / privilege escalation when the server starts | MCPS201-203, MCPS205, MCPS210 |
 | Unpinned supply chain | MCPS204 |
 | Excessive permissions and no human in the loop | MCPS206, MCPS209, MCPS211-213 |
+| Credentials or broad filesystem access published as resources | MCPS214, MCPS206 |
 | Insecure transport | MCPS207, MCPS208 |
 | Plaintext secrets | MCPS301-303 |
 | Parser ambiguity (duplicate definitions) | MCPS001 |
@@ -328,7 +399,9 @@ Everything it analyzes is untrusted input, so:
   Unicode are shown as escapes (for example U+001B or U+200B as backslash-u sequences). A hostile
   description cannot rewrite the terminal or hide parts of the report.
 - Secrets are masked in every output and in fingerprints (which are meant to be uploaded to
-  GitHub); the pin file never stores the values of environment variables or headers.
+  GitHub); the pin file never stores the values of environment variables or headers, nor
+  credentials embedded in prompts or resource URIs.
+- Introspection only lists definitions; it never reads resources or renders prompts.
 - The parser limits file size (16 MiB) and nesting depth; the pin file is written atomically.
 
 ### Out of scope
@@ -336,7 +409,10 @@ Everything it analyzes is untrusted input, so:
 - Analyzing the server's **code** (SAST) or its runtime behaviour.
 - Indirect injection through tool **results** (web content, issues or e-mails the server returns at
   run time).
-- The content of MCP `resources/` and `prompts/`.
+- Resource **contents** (`resources/read`) and rendered prompt **messages** (`prompts/get`): only
+  the metadata from `prompts/list`, `resources/list` and `resources/templates/list` is analyzed.
+  Prompt messages depend on the arguments and resource contents are data, so a poisoned prompt
+  body or a resource that serves injected text at read time is not detected.
 - OAuth authentication/authorization of remote servers and verification of identity or signatures.
 
 ## Limitations
@@ -355,7 +431,14 @@ Everything it analyzes is untrusted input, so:
 - Secret detection is based on known formats and entropy; it does not check whether a token is
   live.
 - Only declared capabilities (name, description, annotations, schema) are analyzed; a server can do
-  more than it declares.
+  more than it declares. A resource template only shows what the server *claims* to serve; the
+  scanner cannot tell whether `notes://{id}` really maps to files elsewhere on disk.
+- Sensitive-path detection on resource URIs knows common credential locations (SSH, cloud CLIs,
+  `.env`, MCP client configs, shell history, browser and keychain stores); other secrets stored
+  under generic names are not recognized.
+- Servers whose resource lists change often (one resource per file or row) produce `MCPS408`/
+  `MCPS409` on every run with pinning; they are *low* by default and below the default
+  `--fail-on high`.
 - Per-client configuration paths change between application versions; if one is missing, pass it
   explicitly.
 
@@ -379,21 +462,23 @@ CI:
 
 The tests use their own cases: known attacks (*tool poisoning* with `<IMPORTANT>`, *shadowing* of
 `send_email`, *ASCII smuggling* with Unicode tags, variation selectors, base64, Trojan Source,
-ANSI), real legitimate descriptions to measure false positives, and a fake MCP server over stdio
-and one over HTTP (JSON and SSE) for introspection. Test tokens are generated at run time so the
-repository contains no strings shaped like real credentials.
+ANSI, poisoned prompts and resources that publish credentials), real legitimate descriptions to
+measure false positives, and a fake MCP server over stdio (tools only, or with paginated prompts
+and resources, failing or hanging listings) and one over HTTP (JSON and SSE) for introspection.
+Test tokens are generated at run time so the repository contains no strings shaped like real
+credentials.
 
 ```text
 src/mcp_scanner/
   cli.py            CLI (scan, rules, discover)
   scanner.py        orchestration of one scan
   loader.py         client configs + discovery + variable expansion
-  manifest.py       offline tool definitions (tools/list, dumps)
+  manifest.py       offline tool, prompt and resource definitions (tools/list, dumps)
   jsonloc.py        JSON/JSONC parser with positions and duplicate keys
-  introspect.py     live tools/list (stdio, Streamable HTTP), opt-in
+  introspect.py     live tools/prompts/resources listing (stdio, Streamable HTTP), opt-in
   engine.py         runs the rules and de-duplicates
   pinning.py        hash pinning (TOFU, update, frozen)
-  rules/            catalog, poisoning, unicode, config, capabilities, secrets
+  rules/            catalog, poisoning, unicode, config, capabilities, resources, secrets
   reporters/        table, json_report, sarif
 tests/              pytest + fixtures (configs, tools, fake MCP server, SARIF schema)
 examples/           sample configuration and tools + CI templates (GitLab, GitHub)
