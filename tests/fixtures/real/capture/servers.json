@@ -1,0 +1,53 @@
+{
+  "mcpServers": {
+    "filesystem": {"command": "mcp-server-filesystem", "args": ["/data"]},
+    "memory": {"command": "mcp-server-memory"},
+    "sequential-thinking": {"command": "mcp-server-sequential-thinking"},
+    "everything": {"command": "mcp-server-everything", "args": ["stdio"]},
+    "fetch": {"command": "/opt/fetch/bin/mcp-server-fetch"},
+    "git": {"command": "/opt/git/bin/mcp-server-git", "args": ["--repository", "/repo"]},
+    "time": {"command": "/opt/time/bin/mcp-server-time", "args": ["--local-timezone", "UTC"]},
+    "github": {
+      "command": "github-mcp-server",
+      "args": ["stdio", "--toolsets", "all"],
+      "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "placeholder-not-a-real-token"}
+    },
+    "playwright": {"command": "playwright-mcp", "args": ["--headless", "--caps", "vision,pdf,devtools"]},
+    "context7": {"command": "context7-mcp"},
+    "notion": {"command": "notion-mcp-server", "env": {"NOTION_TOKEN": "placeholder-not-a-real-token"}},
+    "desktop-commander": {"command": "desktop-commander"},
+    "kubernetes": {"command": "mcp-server-kubernetes"},
+    "grafana": {
+      "command": "mcp-grafana",
+      "env": {
+        "GRAFANA_URL": "http://127.0.0.1:3000",
+        "GRAFANA_SERVICE_ACCOUNT_TOKEN": "placeholder-not-a-real-token"
+      }
+    },
+    "supabase": {
+      "command": "mcp-server-supabase",
+      "args": ["--features", "account,database,debugging,development,functions,branching,storage"],
+      "env": {"SUPABASE_ACCESS_TOKEN": "placeholder-not-a-real-token"}
+    },
+    "terraform": {"command": "terraform-mcp-server", "args": ["stdio"]},
+    "mongodb": {
+      "command": "/opt/js/mongodb-mcp-server/node_modules/.bin/mongodb-mcp-server",
+      "env": {"MDB_MCP_TELEMETRY": "disabled"}
+    },
+    "puppeteer": {"command": "/opt/js/modelcontextprotocol-server-puppeteer/node_modules/.bin/mcp-server-puppeteer"},
+    "heroku": {
+      "command": "/opt/js/heroku-mcp-server/node_modules/.bin/heroku-mcp-server",
+      "env": {"HEROKU_API_KEY": "placeholder-not-a-real-token"}
+    },
+    "playwright-ea": {"command": "/opt/js/executeautomation-playwright-mcp-server/node_modules/.bin/playwright-mcp-server"},
+    "git-cyanheads": {
+      "command": "/opt/js/cyanheads-git-mcp-server/node_modules/.bin/git-mcp-server",
+      "env": {"MCP_TRANSPORT_TYPE": "stdio", "MCP_LOG_LEVEL": "error"}
+    },
+    "sqlite": {"command": "/opt/mcp-server-sqlite/bin/mcp-server-sqlite", "args": ["--db-path", "/tmp/demo.db"]},
+    "sentry": {
+      "command": "/opt/mcp-server-sentry/bin/mcp-server-sentry",
+      "args": ["--auth-token", "placeholder-not-a-real-token"]
+    }
+  }
+}
