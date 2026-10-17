@@ -46,6 +46,16 @@ def _keys(resources: list[ResourceDefinition] | None) -> list[str] | None:
     return None if resources is None else [resource_key(r) for r in resources]
 
 
+def _counts(inv: ServerInventory | None) -> tuple[int | None, int | None]:
+    """Return the prompt and resource (plus template) counts; None when not collected."""
+    if inv is None:
+        return None, None
+    prompts = None if inv.prompts is None else len(inv.prompts)
+    if inv.resources is None and inv.resource_templates is None:
+        return prompts, None
+    return prompts, len(inv.all_resources())
+
+
 def _inventory(inv: ServerInventory) -> dict[str, Any]:
     """Summarize an inventory; None marks kinds that were not collected."""
     return {
@@ -69,6 +79,7 @@ def build(
     for server in report.servers:
         location = server.locate()
         inventory = tools_by_server.get(server.name)
+        prompt_count, resource_count = _counts(inventory)
         servers.append(
             {
                 "name": server.name,
@@ -83,10 +94,8 @@ def build(
                 "source": display_path(location.path, root) if location.path else None,
                 "line": location.line,
                 "tools": len(inventory.tools) if inventory else None,
-                "prompts": len(inventory.prompts)
-                if inventory and inventory.prompts is not None
-                else None,
-                "resources": len(inventory.all_resources()) if inventory else None,
+                "prompts": prompt_count,
+                "resources": resource_count,
                 "tools_origin": inventory.origin if inventory else None,
             }
         )
