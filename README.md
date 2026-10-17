@@ -223,7 +223,8 @@ plain `cmd /c npx ...` and *high* when there is `&&`, `|` or inline code).
   Hugging Face, npm, PyPI, JWT, private keys...), sensitive key names with high-entropy literal
   values, `--token VALUE` flags, `Authorization` headers and credentials in URLs. References
   (`${VAR}`, `${input:x}`, `$VAR`, `%VAR%`) and placeholders are ignored. Evidence is **always**
-  masked (`ghp_****(40 chars)`), including in JSON and SARIF.
+  masked (`ghp_****(40 chars)`), including in JSON and SARIF; query values are masked also when
+  percent-encoded (`sig=Ab%2Bc...`).
 
 ## Hash pinning
 
@@ -232,7 +233,8 @@ Detects the *rug pull*: an approved tool, prompt or resource that later changes 
 Each run computes the SHA-256 of the canonical definition of every tool (plus the description and
 the schema separately), prompt, resource and resource template, of the server `instructions`, and
 of each component of the launch configuration (command, arguments, URL, **names** of environment
-variables and headers; never their values, so rotating a token is not a change).
+variables and headers; never their values, so rotating a token is not a change). Definitions and
+instructions are masked first (see [Secrets in pinned definitions](#secrets-in-pinned-definitions)).
 
 - **First time (TOFU)**: whatever is not in the pin file is pinned silently.
 - **Afterwards**: any change produces `MCPS401`/`MCPS405`/`MCPS404` (tools, instructions, launch)
@@ -250,9 +252,7 @@ Prompts and resources:
 - Resource lists are often dynamic (files, database rows), so a new concrete resource is reported
   as *low*; new prompts and templates stay *medium*. `size` and `annotations.lastModified` follow
   the content and are not pinned.
-- Definitions are hashed and stored with provider tokens and URL credentials masked, and
-  resources are keyed by their masked URI: the pin file never holds a credential embedded in a
-  prompt or resource, and rotating it is not a change.
+- Resources are keyed by their masked URI, so a credential in the URI never becomes a key.
 - A kind that was not collected (a manifest without `prompts`, a failed listing) keeps its
   approved entries untouched instead of being reported as removed.
 
@@ -260,12 +260,61 @@ Default file: `$MCP_SCANNER_PINS` or `~/.mcp-scanner/pins.json`; use `--pins` fo
 stores hashes and the approved definition (for the diff), so it can be committed next to the
 project.
 
-**Pin file versions.** This version writes format `2` (adds `prompts`, `resources` and
-`resource_templates` per server) and still reads format `1`. With a format-1 file, the prompts and
-resources of already-approved servers are pinned on first use, or reported as `MCPS408` with
-`--frozen-pins` until you run `--update-pins` once; the file is rewritten as format 2 the next
-time it changes. Older scanners refuse format-2 files instead of silently ignoring the new
-entries.
+### Secrets in pinned definitions
+
+Servers sometimes embed credentials in their metadata: a token in a description, a schema
+`default` or `enum`, a connection string with a password in the instructions. The pin file is meant
+to be committed, so it must not copy them. Before hashing and storing, every string of a tool,
+prompt, resource, template and the instructions goes through the same masking as reports: provider
+tokens become `ghp_****(40 chars)`, URL passwords and sensitive query values (`token`, `api_key`,
+`sig`, ..., also when percent-encoded) become `****`.
+
+Hashing only the masked text would leave a blind spot: a server could change what sits inside a
+masked span (a token-shaped `sk-ant-Ignore_previous_rules...` of the same length, or arbitrary
+percent-encoded text in `?token=`) without changing the hash. Hashing the raw text instead would
+put a *verifier* in the file: for a low-entropy password, anyone who reads the pin file can hash
+candidates offline until one matches, and a salt stored next to the hash does not prevent that. So
+each masked value adds a marker to the hash, chosen by how guessable the value is:
+
+| Masked value | Bound in the hash by | Change inside it | Rotating it |
+|---|---|---|---|
+| Provider token (GitHub, OpenAI, Slack, AWS, JWT, ...) | HMAC-SHA256 keyed with a random per-file `salt` | detected | reported as a change |
+| URL password, sensitive query value | its length only | detected only if the length changes | not a change if the length is kept |
+
+Provider formats require long random strings, so their keyed digest cannot be brute-forced; the
+salt only stops the same token from being linked across pin files or matched against published
+hash lists. URL passwords are often chosen by people, so no digest of them is stored at all; the
+pin file reveals their length, never their content. Without masked values the hash is the plain
+SHA-256 of the definition, as before. Changes inside a masked value are reported as `a masked secret
+value changed`, without showing either value.
+
+When a pin file *as loaded* holds a credential in clear text (files written before format 3 stored
+tool definitions and instructions verbatim), the scan reports `MCPS304` once, naming the affected
+entries with the values masked, and writes the file back without them (with `--frozen-pins` it
+only reports). Earlier versions of the file, its git history and any copies still contain the
+credentials: **rotate them**, then commit the rewritten file.
+
+### Pin file versions
+
+| Format | Written by | Adds |
+|---|---|---|
+| `1` | first releases | tools, instructions, launch configurations (tool definitions and instructions stored verbatim) |
+| `2` | prompts and resources support | `prompts`, `resources`, `resource_templates`, stored masked |
+| `3` | this version | tool definitions and instructions stored masked, masked values bound in the hash, per-file `salt`, `"scheme": 3` on every record |
+
+This version reads all three and writes format `3`. Upgrading needs no action and reports no
+change:
+
+- Records without a `scheme` are verified the way they were written: tools and instructions
+  against the raw definition (they are converted on load from the definition the old file stored),
+  prompts and resources against the format-2 masking (they keep their old hash until the item is
+  seen again, then are refreshed). For a definition without secrets every hash is identical across
+  formats.
+- The file is rewritten as format 3 the next time it changes, or right away when it held
+  credentials (`MCPS304`). `--frozen-pins` never writes: old records keep verifying, and the
+  prompts and resources of a format-1 file are reported as `MCPS408` until you run `--update-pins`
+  once.
+- Older scanners refuse format-3 files instead of misreading the masked definitions.
 
 Recommended workflow in a repository:
 
@@ -401,7 +450,8 @@ Everything it analyzes is untrusted input, so:
   description cannot rewrite the terminal or hide parts of the report.
 - Secrets are masked in every output and in fingerprints (which are meant to be uploaded to
   GitHub); the pin file never stores the values of environment variables or headers, nor
-  credentials embedded in prompts or resource URIs.
+  provider tokens or URL credentials embedded in definitions or instructions, and reports any it
+  finds from an older format (`MCPS304`).
 - Introspection only lists definitions; it never reads resources or renders prompts.
 - The parser limits file size (16 MiB) and nesting depth; the pin file is written atomically.
 
@@ -437,6 +487,16 @@ Everything it analyzes is untrusted input, so:
 - Sensitive-path detection on resource URIs knows common credential locations (SSH, cloud CLIs,
   `.env`, MCP client configs, shell history, browser and keychain stores); other secrets stored
   under generic names are not recognized.
+- Pin-file masking covers what the secret rules recognize: provider token formats and URL
+  credentials. A credential in another shape (a bare hex key in a description, "password: x")
+  is stored and hashed as written. Tool, prompt and server names are stored as they are.
+- A change inside a masked URL password or query value that keeps its length is not detected by
+  pinning (the text rules still scan the raw value on every run), and the pin file reveals that
+  length. Launch components are hashed, not stored, but the hash covers literal arguments and URLs,
+  so a weak password written in the configuration could be guessed from it by someone who also
+  knows the rest of the command line.
+- `--dump-tools` writes definitions verbatim (offline scans need the real text); review the dump,
+  and the `MCPS301` findings about it, before committing it.
 - Servers whose resource lists change often (one resource per file or row) produce `MCPS408`/
   `MCPS409` on every run with pinning; they are *low* by default and below the default
   `--fail-on high`.
