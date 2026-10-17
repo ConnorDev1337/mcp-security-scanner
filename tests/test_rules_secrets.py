@@ -214,3 +214,15 @@ def test_masking_is_idempotent(text):
     assert mask_spans(once)[1] == []
     for value in TOKENS.values():
         assert value not in once
+
+
+def test_mask_hides_the_whole_private_key():
+    body = "\n".join(_rand(64, string.ascii_letters + string.digits + "+/") for _ in range(3))
+    pem = f"-----BEGIN RSA PRIVATE KEY-----\n{body}\n-----END RSA PRIVATE KEY-----"
+    masked, spans = mask_spans(f"Signs with:\n{pem}\nThen uploads.")
+    assert masked == f"Signs with:\n----****({len(pem)} chars)\nThen uploads."
+    assert [(s.label, s.value) for s in spans] == [("Private key", pem)]
+    # Without a footer, the base64 that follows the header is masked.
+    masked = mask(f"-----BEGIN PRIVATE KEY-----\n{body}")
+    assert body.splitlines()[0] not in masked
+    assert mask(masked) == masked
