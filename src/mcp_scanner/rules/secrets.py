@@ -90,11 +90,12 @@ _SENSITIVE_PARAM = re.compile(
     r"sig|signature|code|session|jwt)$"
 )
 _URL = re.compile(r"[A-Za-z][A-Za-z0-9+.\-]*://[^\s\"'<>]+")
-# A whole PEM private key: the header, the body (with legacy encryption headers) and the
-# footer, or the base64 that follows a header without footer.
+# A whole PEM private key: the header, the body (with legacy encryption headers and
+# newlines possibly escaped as "\n") and the footer, or the base64 that follows a header
+# without footer.
 _PRIVATE_KEY_BLOCK = re.compile(
     r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----"
-    r"(?:[A-Za-z0-9+/=\s:,.\-]*?-----END (?:[A-Z0-9]+ )*PRIVATE KEY-----|[A-Za-z0-9+/=\s]*)"
+    r"(?:[A-Za-z0-9+/=\s:,.\\-]*?-----END (?:[A-Z0-9]+ )*PRIVATE KEY-----|[A-Za-z0-9+/=\s\\]*)"
 )
 _ENV_ASSIGNMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.+)$")
 
