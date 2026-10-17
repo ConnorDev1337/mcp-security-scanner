@@ -58,6 +58,8 @@ EXPECTED_CAPABILITIES = {
     ("MCPS211", "github/delete_file"),
     ("MCPS211", "grafana/delete_annotation"),
     ("MCPS211", "grafana/delete_snapshot"),
+    # "Run code/commands in Heroku one-off dyno with network and filesystem access".
+    ("MCPS211", "heroku/deploy_one_off_dyno"),
     ("MCPS211", "heroku/pg_kill"),  # Stops Postgres processes (queries, transactions).
     ("MCPS211", "heroku/pg_psql"),  # "Execute SQL queries ... modify schema, manage data".
     ("MCPS211", "kubernetes/exec_in_pod"),
