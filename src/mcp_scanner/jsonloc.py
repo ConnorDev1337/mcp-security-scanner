@@ -10,6 +10,7 @@ the client runs the last one.
 from __future__ import annotations
 
 import bisect
+import datetime as _dt
 import json
 import re
 import tomllib
@@ -23,7 +24,8 @@ MAX_FILE_BYTES = 16 * 1024 * 1024
 MAX_DEPTH = 256
 
 _STRING = re.compile(r'"[^"\\]*(?:\\.[^"\\]*)*"', re.DOTALL)
-_NUMBER = re.compile(r"-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?")
+# ASCII digits only: ``\d`` would also match other scripts' digits, which JSON rejects.
+_NUMBER = re.compile(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")
 _DECODER = json.JSONDecoder(strict=False)
 
 
@@ -53,6 +55,9 @@ class _Parser:
         self.allow_comments = allow_comments
         self.offsets: dict[str, int] = {}
         self.duplicates: list[str] = []
+        # Pointers in the order their offsets were recorded; the offsets of one value's
+        # descendants form a contiguous slice, dropped in one go when its key is repeated.
+        self.recorded: list[str] = []
 
     def error(self, message: str, pos: int | None = None) -> JSONLocError:
         line, column = _position(_line_starts(self.text), self.pos if pos is None else pos)
@@ -89,7 +94,9 @@ class _Parser:
         if self.pos >= self.n:
             raise self.error("unexpected end of input")
         # Object members are already located at their key; keep that position.
-        self.offsets.setdefault(pointer, self.pos)
+        if pointer not in self.offsets:
+            self.offsets[pointer] = self.pos
+            self.recorded.append(pointer)
         c = self.text[self.pos]
         if c == "{":
             return self.object(pointer, depth)
@@ -100,7 +107,10 @@ class _Parser:
         match = _NUMBER.match(self.text, self.pos)
         if match:
             self.pos = match.end()
-            return json.loads(match.group())
+            try:
+                return json.loads(match.group())
+            except ValueError:  # Integers beyond the interpreter's digit limit.
+                raise self.error("number too long", match.start()) from None
         for literal, result in (("true", True), ("false", False), ("null", None)):
             if self.text.startswith(literal, self.pos):
                 self.pos += len(literal)
@@ -120,6 +130,7 @@ class _Parser:
     def object(self, pointer: str, depth: int) -> dict[str, Any]:
         self.pos += 1
         result: dict[str, Any] = {}
+        spans: dict[str, tuple[int, int]] = {}  # Slice of ``recorded`` per member value.
         self.skip()
         if self.peek() == "}":
             self.pos += 1
@@ -134,15 +145,18 @@ class _Parser:
             if key in result:
                 self.duplicates.append(child)
                 # The last definition wins: drop offsets recorded for the earlier value.
-                prefix = child + "/"
-                for stale in [p for p in self.offsets if p.startswith(prefix)]:
-                    del self.offsets[stale]
+                start, end = spans[key]
+                for stale in self.recorded[start:end]:
+                    self.offsets.pop(stale, None)
             self.offsets[child] = key_pos
+            self.recorded.append(child)
             self.skip()
             if self.peek() != ":":
                 raise self.error("expected ':'")
             self.pos += 1
+            start = len(self.recorded)
             result[key] = self.value(child, depth + 1)
+            spans[key] = (start, len(self.recorded))
             self.skip()
             c = self.peek()
             if c == ",":
@@ -232,12 +246,37 @@ class SourceDocument:
         return Location(self.path, None, None, pointer)
 
 
+def _json_like(value: Any, depth: int = 0) -> Any:
+    """Return parsed TOML data with dates and times as ISO 8601 strings.
+
+    Everything downstream (rules, hashing, reports) handles JSON types only. Raise
+    ``ValueError`` if the data is nested deeper than the JSON parser accepts.
+    """
+    if depth > MAX_DEPTH:
+        raise ValueError("TOML document is nested too deeply")
+    if isinstance(value, dict):
+        return {key: _json_like(item, depth + 1) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_like(item, depth + 1) for item in value]
+    if isinstance(value, _dt.date | _dt.time):  # datetime is a subclass of date.
+        return value.isoformat()
+    return value
+
+
 def from_text(path: str, text: str, *, toml: bool = False) -> SourceDocument:
-    """Parse ``text`` as JSONC, or as TOML if ``toml`` is true; a leading BOM is ignored."""
+    """Parse ``text`` as JSONC, or as TOML if ``toml`` is true; a leading BOM is ignored.
+
+    Raise :class:`JSONLocError`, ``tomllib.TOMLDecodeError`` or ``ValueError`` (TOML
+    nested too deeply) on invalid input.
+    """
     if text.startswith("\ufeff"):
         text = text[1:]
     if toml:
-        return SourceDocument(path, text, tomllib.loads(text))
+        try:
+            data = tomllib.loads(text)
+        except RecursionError:  # tomllib has no nesting limit of its own.
+            raise ValueError("TOML document is nested too deeply") from None
+        return SourceDocument(path, text, _json_like(data))
     data, offsets, duplicates = parse(text)
     return SourceDocument(path, text, data, offsets, duplicates)
 
