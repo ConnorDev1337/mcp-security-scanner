@@ -1,11 +1,32 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
+from hypothesis import HealthCheck, settings
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+# Property-based tests: "ci" (the default) is small and deterministic so every run checks
+# the same examples quickly; "fuzz" explores many more random examples. Select a profile
+# with HYPOTHESIS_PROFILE=fuzz or pytest --hypothesis-profile=fuzz.
+settings.register_profile(
+    "ci",
+    max_examples=40,
+    deadline=None,
+    derandomize=True,
+    suppress_health_check=[HealthCheck.too_slow, HealthCheck.data_too_large],
+)
+settings.register_profile(
+    "fuzz",
+    max_examples=2000,
+    deadline=None,
+    print_blob=True,
+    suppress_health_check=[HealthCheck.too_slow, HealthCheck.data_too_large],
+)
+settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ci"))
 
 
 @pytest.fixture(autouse=True)

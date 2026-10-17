@@ -506,7 +506,14 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest --cov                      # tests + coverage
 ruff check src tests && ruff format --check src tests
+HYPOTHESIS_PROFILE=fuzz pytest tests/test_fuzz_*.py   # long property-based run
 ```
+
+The property-based tests (`tests/test_fuzz_*.py`, [Hypothesis](https://hypothesis.works/)) run
+with a small deterministic profile (`ci`) by default. The `fuzz` profile, selected with
+`HYPOTHESIS_PROFILE=fuzz` or `pytest --hypothesis-profile=fuzz`, tries many more random examples;
+a failure prints the shrunk input and a `@reproduce_failure` blob to replay it. Every bug found
+this way gets a regular regression test with the minimal example.
 
 CI:
 
