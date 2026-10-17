@@ -106,8 +106,19 @@ def _masked(value: Any, spans: list[MaskedSpan], *, legacy: bool = False) -> Any
         return [_masked(item, spans, legacy=legacy) for item in value]
     if isinstance(value, dict):
         pairs = {}
+        taken: set[str] = set()
         for key in sorted(value, key=str):
             masked_key = _masked(str(key), spans, legacy=legacy)
+            if not legacy:
+                # Keys that mask alike (two tokens of one format and length) get a
+                # numbered suffix: keeping one value would hide changes to the other
+                # and make the result depend on the key order.
+                unique, number = masked_key, 1
+                while unique in taken:
+                    number += 1
+                    unique = f"{masked_key} ({number})"
+                masked_key = unique
+                taken.add(masked_key)
             pairs[key] = (masked_key, _masked(value[key], spans, legacy=legacy))
         return dict(pairs[key] for key in value)
     return value

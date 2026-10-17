@@ -187,3 +187,16 @@ def test_tokens_in_names_never_become_pin_keys(tmp_path):
     loaded = PinStore.load(path)
     assert loaded.stored_secrets == []
     assert check_pins(loaded, [], [inventory]).findings == []
+
+
+def test_keys_that_mask_alike_keep_every_value():
+    # Found by fuzzing: two token-shaped keys of one format and length mask to the same
+    # key, so one value was dropped (its changes went undetected) and which one
+    # depended on the key order.
+    rng = random.Random(6)
+    first, second = ("lin_api_" + "".join(rng.choices("abcdefXYZ0123", k=40)) for _ in "12")
+    value = {first: "one", second: "two"}
+    masked, digest = pinned_form(value, b"salt")
+    assert sorted(masked.values()) == ["one", "two"]
+    assert pinned_form({second: "two", first: "one"}, b"salt")[1] == digest
+    assert pinned_form({first: "one", second: "changed"}, b"salt")[1] != digest
