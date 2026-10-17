@@ -12,7 +12,13 @@ import pytest
 
 from mcp_scanner.engine import analyze
 from mcp_scanner.models import ServerConfig, Severity
-from mcp_scanner.rules.secrets import find_known_secrets, is_placeholder, looks_secret
+from mcp_scanner.rules.secrets import (
+    find_known_secrets,
+    is_placeholder,
+    looks_secret,
+    mask,
+    mask_spans,
+)
 
 _RNG = random.Random(1337)
 
@@ -152,3 +158,59 @@ def test_helpers():
     assert looks_secret("mySecretPass123")
     assert not looks_secret("/etc/token")
     assert not looks_secret("true")
+
+
+def test_mask_spans_lists_every_masked_value():
+    token = TOKENS["GitHub token"]
+    text = (
+        f"Use {token} or https://admin:Tr0ub4dor3@db.internal/app?sslmode=require"
+        "&api_key=k3y-v4lue-9&code=12 and https://u:password@example.com/"
+    )
+    masked, spans = mask_spans(text)
+    assert masked == mask(text)
+    assert masked == (
+        "Use ghp_****(40 chars) or https://admin:****@db.internal/app?sslmode=require"
+        "&api_key=****&code=**** and https://u:****@example.com/"
+    )
+    found = [(s.kind, s.label, s.value, s.placeholder) for s in spans]
+    assert found == [
+        ("token", "GitHub token", token, False),
+        ("url", "URL password", "Tr0ub4dor3", False),
+        ("url", "URL query parameter 'api_key'", "k3y-v4lue-9", False),
+        ("url", "URL query parameter 'code'", "12", True),
+        ("url", "URL password", "password", True),
+    ]
+    assert mask_spans("Adds two numbers.") == ("Adds two numbers.", [])
+
+
+def test_mask_covers_percent_encoded_query_values():
+    signed = "https://acct.blob.core.windows.net/c/f?sv=2024-01-01&sig=Ab%2Bc9%2Fd3%3D&x=1"
+    assert mask(signed) == "https://acct.blob.core.windows.net/c/f?sv=2024-01-01&sig=****&x=1"
+    plus = "https://api.example.com/?token=Ab+cd+ef+12"
+    assert mask(plus) == "https://api.example.com/?token=****"
+    # A sensitive name that is a suffix of another parameter is not confused with it.
+    shadow = "https://api.example.com/?mytoken=abcdef123&token=abcdef123"
+    assert mask(shadow) == "https://api.example.com/?mytoken=abcdef123&token=****"
+    # The legacy mode reproduces the masking of format-2 pin files, bugs included.
+    assert mask_spans(signed, legacy=True)[0] == signed
+    assert mask_spans(shadow, legacy=True)[0] == (
+        "https://api.example.com/?mytoken=****&token=abcdef123"
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"key {TOKENS['OpenAI API key']} and {TOKENS['Slack token']}",
+        f"https://x-access-token:{TOKENS['GitHub token']}@github.com/o/r.git",
+        f"https://api.example.com/v1?token={TOKENS['GitLab token']}&page=2",
+        "https://u:p%40ss-w0rd@h/?secret=a%26b%3Dc&password=hunter22#frag",
+        "postgres://admin:****@db/app?token=****",
+    ],
+)
+def test_masking_is_idempotent(text):
+    once = mask(text)
+    assert mask(once) == once
+    assert mask_spans(once)[1] == []
+    for value in TOKENS.values():
+        assert value not in once

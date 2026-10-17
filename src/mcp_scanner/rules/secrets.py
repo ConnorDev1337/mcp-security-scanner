@@ -9,10 +9,10 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
-from urllib.parse import parse_qsl, urlsplit
+from urllib.parse import parse_qsl, unquote_plus, urlsplit
 
 from ..models import Finding, ServerConfig, Severity
-from ..textutil import redact, shannon_entropy
+from ..textutil import redact, sanitize, shannon_entropy
 from .catalog import get
 
 
@@ -164,15 +164,58 @@ def url_credentials(url: str) -> list[str]:
     return problems
 
 
-def _mask_url(match: re.Match[str]) -> str:
-    url = match.group()
+@dataclass(frozen=True)
+class MaskedSpan:
+    """A value replaced by :func:`mask_spans`: a provider token or a URL credential."""
+
+    kind: str  # "token" (provider format) or "url" (URL password or query value).
+    label: str
+    value: str
+    severity: Severity
+    placeholder: bool = False  # An obvious placeholder ("password", "****"), not a credential.
+
+
+def _mask_query(url: str, spans: list[MaskedSpan]) -> str:
+    """Mask the values of sensitive query parameters, percent-encoded or not."""
+    start = url.find("?")
+    if start < 0:
+        return url
+    end = url.find("#", start)
+    end = len(url) if end < 0 else end
+    pairs = url[start + 1 : end].split("&")
+    for index, pair in enumerate(pairs):
+        key, sep, value = pair.partition("=")
+        decoded = unquote_plus(value)
+        if (
+            not sep
+            or not decoded
+            or not _SENSITIVE_PARAM.match(unquote_plus(key))
+            or is_reference(decoded)
+            # Values that mask() already redacted as provider tokens ("ghp_****(40 chars)").
+            or "****" in decoded
+        ):
+            continue
+        pairs[index] = f"{key}=****"
+        placeholder = len(decoded) < 6 or is_placeholder(decoded)
+        label = f"URL query parameter {sanitize(unquote_plus(key), 40)!r}"
+        spans.append(MaskedSpan("url", label, value, Severity.HIGH, placeholder))
+    return url[: start + 1] + "&".join(pairs) + url[end:]
+
+
+def _mask_url(url: str, spans: list[MaskedSpan], legacy: bool) -> str:
     try:
         parts = urlsplit(url)
         password = parts.password
     except ValueError:
         return url
     if password and not is_reference(password):
-        url = url.replace(f":{password}@", ":****@", 1)
+        masked = url.replace(f":{password}@", ":****@", 1)
+        if masked != url:
+            placeholder = is_placeholder(password)
+            spans.append(MaskedSpan("url", "URL password", password, Severity.HIGH, placeholder))
+        url = masked
+    if not legacy:
+        return _mask_query(url, spans)
     for key, value in parse_qsl(parts.query):
         # Skip values that mask() already redacted as provider tokens ("ghp_****(40 chars)").
         if (
@@ -185,11 +228,25 @@ def _mask_url(match: re.Match[str]) -> str:
     return url
 
 
+def mask_spans(text: str, *, legacy: bool = False) -> tuple[str, list[MaskedSpan]]:
+    """Mask provider tokens and URL credentials; return the text and the masked values.
+
+    Values are listed in a deterministic order: provider tokens (by pattern, then
+    position), then URL credentials in order of appearance. Masking is idempotent.
+    ``legacy`` reproduces the masking of format-2 pin files, which left
+    percent-encoded query values in clear text; it only serves to verify those pins.
+    """
+    spans: list[MaskedSpan] = []
+    for pattern, secret in find_known_secrets(text):
+        spans.append(MaskedSpan("token", pattern.label, secret, pattern.severity))
+        text = text.replace(secret, redact(secret))
+    text = _URL.sub(lambda match: _mask_url(match.group(), spans, legacy), text)
+    return text, spans
+
+
 def mask(text: str) -> str:
     """Mask provider tokens and URL credentials inside arbitrary text."""
-    for _, secret in find_known_secrets(text):
-        text = text.replace(secret, redact(secret))
-    return _URL.sub(_mask_url, text)
+    return mask_spans(text)[0]
 
 
 def mask_args(args: list[str]) -> list[str]:
