@@ -233,7 +233,7 @@ def test_prompts_and_resources_are_pinned_on_first_use(tmp_path):
     assert outcome.findings == []
     assert (outcome.pinned_prompts, outcome.pinned_resources) == (1, 2)
     data = json.loads(path.read_text(encoding="utf-8"))
-    assert data["version"] == 2
+    assert data["version"] == 3
     entry = data["servers"]["math"]
     assert set(entry["prompts"]) == {"review"}
     assert set(entry["resources"]) == {"file:///project/README.md"}
@@ -365,9 +365,12 @@ def test_version_1_pin_files_load_and_upgrade(tmp_path):
     outcome = _run(path, inventories=[_full()])
     assert outcome.findings == [] and outcome.pinned_prompts == 1
     data = json.loads(path.read_text(encoding="utf-8"))
-    assert data["version"] == 2
-    assert data["servers"]["math"]["tools"] == legacy["servers"]["math"]["tools"]
-    assert PinStore.load(path).version == 2
+    assert data["version"] == 3
+    # Without secrets the digests are unchanged; the record only gains its scheme.
+    assert data["servers"]["math"]["tools"] == {
+        "add": {**legacy["servers"]["math"]["tools"]["add"], "scheme": 3}
+    }
+    assert PinStore.load(path).version == 3
 
 
 def test_pins_never_store_secrets_from_prompts_or_resources(tmp_path):
@@ -381,12 +384,34 @@ def test_pins_never_store_secrets_from_prompts_or_resources(tmp_path):
     text = path.read_text(encoding="utf-8")
     assert TOKEN not in text and "pa55word-db" not in text
     assert "https://api.example.com/export?token=ghp_****(40 chars)" in text
-    # Rotating the embedded credentials is not a definition change.
+    # A URL password of the same length is bound by its length only: rotating it is
+    # not a change. A provider token is bound by a keyed digest: replacing it is.
+    same_length = {"uri": "postgres://admin:other-pass1@db.internal/app", "name": "db"}
+    outcome = _run(
+        path, inventories=[_full(prompts=[prompt], resources=[resources[0], same_length])]
+    )
+    assert outcome.findings == []
     rotated_token = "ghp_" + "".join(random.Random(6).choices(string.ascii_letters, k=36))
     rotated = [
         {"uri": f"https://api.example.com/export?token={rotated_token}", "name": "export"},
-        {"uri": "postgres://admin:other-pass-1@db.internal/app", "name": "db"},
+        {"uri": "postgres://admin:other-pass-12@db.internal/app", "name": "db"},
     ]
     rotated_prompt = {"name": "p", "description": f"Calls the API with {rotated_token}."}
     outcome = _run(path, inventories=[_full(prompts=[rotated_prompt], resources=rotated)])
-    assert outcome.findings == []
+    found = sorted((f.rule.id, f.subject, f.field, f.evidence) for f in outcome.findings)
+    assert found == [
+        ("MCPS406", "prompt:p", "masked secret", "a masked secret value changed"),
+        (
+            "MCPS407",
+            "resource:https://api.example.com/export?token=ghp_****(40 chars)",
+            "masked secret",
+            "a masked secret value changed",
+        ),
+        (
+            "MCPS407",
+            "resource:postgres://admin:****@db.internal/app",
+            "masked secret",
+            "a masked secret value changed",
+        ),
+    ]
+    assert rotated_token not in str(outcome.findings)
