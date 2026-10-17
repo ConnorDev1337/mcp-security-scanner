@@ -10,9 +10,10 @@ already approved is reported (rug-pull detection).
 The pin file is meant to be reviewed and committed. It stores hashes, the
 approved definitions (to show diffs) and the *names* of environment variables
 and headers, never their values. Every definition and the server instructions
-are stored with provider tokens and URL credentials masked, and resources are
-keyed by their masked URI, so the pin file holds no secret a server embeds in
-its metadata; :func:`pinned_form` explains how masked values stay bound.
+are stored with provider tokens and URL credentials masked, and servers, tools,
+prompts and resources are keyed by their masked name or URI (as are the stored
+variable names), so the pin file holds no secret a server embeds in its
+metadata; :func:`pinned_form` explains how masked values stay bound.
 
 Format history: version 1 pinned tools, instructions and launch configurations.
 Version 2 adds ``prompts``, ``resources`` and ``resource_templates`` per server.
@@ -209,7 +210,7 @@ _KINDS = (
         "prompt",
         "name",
         "MCPS406",
-        lambda prompt: prompt.name,
+        lambda prompt: mask(prompt.name),
         prompt_definition,
     ),
     # Concrete resource lists are often dynamic (files, rows), so a new one is only LOW.
@@ -237,6 +238,24 @@ _KINDS = (
 )
 
 
+def pin_key(name: Any) -> str:
+    """Return the key of a server, tool, prompt or resource in the pin file.
+
+    It is the name (or URI) with provider tokens and URL credentials masked, so a
+    credential embedded in an identifier never reaches the file. Ordinary names are
+    their own key.
+    """
+    return mask(str(name))
+
+
+def _rekeyed(records: dict[Any, Any]) -> dict[str, Any]:
+    """Return ``records`` keyed by :func:`pin_key`; the first of colliding keys wins."""
+    rekeyed: dict[str, Any] = {}
+    for key, record in records.items():
+        rekeyed.setdefault(pin_key(key), record)
+    return rekeyed
+
+
 def launch_components(server: ServerConfig) -> dict[str, str]:
     """Hash each launch component; only the names of env vars and headers are included."""
     return {
@@ -250,12 +269,20 @@ def launch_components(server: ServerConfig) -> dict[str, str]:
     }
 
 
+def _env_names(names: Iterable[str]) -> list[str]:
+    """Return environment variable names as stored for diffs, with tokens masked.
+
+    A token pasted as a variable name would otherwise be copied to the pin file.
+    """
+    return sorted(mask(str(name)) for name in names)
+
+
 def launch_record(server: ServerConfig) -> dict[str, Any]:
     components = launch_components(server)
     return {
         "sha256": sha256_of(components),
         "components": components,
-        "env_keys": sorted(server.env),
+        "env_keys": _env_names(server.env),
     }
 
 
@@ -548,13 +575,21 @@ def _migrate(store: PinStore) -> None:
     from it. Prompt and resource records only stored a masked definition: they
     keep their format-2 digest until it is verified against the current item,
     but their copy is masked again and resources are re-keyed, because the
-    format-2 masking missed percent-encoded query values.
+    format-2 masking missed percent-encoded query values. Names of servers, tools and
+    prompts, which key the records, and environment variable names kept for launch
+    diffs are masked too: they were stored verbatim before (see :func:`pin_key`).
     """
+    store.servers = _rekeyed(store.servers)
     for entry in store.servers.values():
         if not isinstance(entry, dict):
             continue
+        launch = entry.get("launch")
+        for record in launch.values() if isinstance(launch, dict) else ():
+            if isinstance(record, dict) and isinstance(record.get("env_keys"), list):
+                record["env_keys"] = _env_names(record["env_keys"])
         tools = entry.get("tools")
         if isinstance(tools, dict):
+            tools = entry["tools"] = _rekeyed(tools)
             for name, record in tools.items():
                 if isinstance(record, dict) and record.get("scheme") is None:
                     tools[name] = _migrate_tool(str(name), record, store.salt)
@@ -569,7 +604,7 @@ def _migrate(store: PinStore) -> None:
             for key, record in approved.items():
                 if isinstance(record, dict) and record.get("scheme") is None:
                     record = {**record, "definition": _masked(record.get("definition"), [])}
-                migrated.setdefault(mask(key) if kind.pointer != "name" else key, record)
+                migrated.setdefault(pin_key(key), record)
             entry[kind.attr] = migrated
 
 
@@ -719,8 +754,8 @@ def check_pins(
     outcome = PinOutcome(str(store.path), mode)
     configs_by_name: dict[str, list[ServerConfig]] = defaultdict(list)
     for server in servers:
-        configs_by_name[server.name].append(server)
-    inventory_by_name = {inv.server: inv for inv in inventories}
+        configs_by_name[pin_key(server.name)].append(server)
+    inventory_by_name = {pin_key(inv.server): inv for inv in inventories}
 
     def report(rule_id: str, message: str, location: Location, **kwargs: Any) -> None:
         outcome.findings.append(Finding(get(rule_id), message, location, **kwargs))
@@ -807,7 +842,9 @@ def check_pins(
                     server=name,
                 )
                 continue
-            entry["tools"] = {tool.name: _tool_record(tool, now, salt) for tool in inv.tools}
+            entry["tools"] = {
+                pin_key(tool.name): _tool_record(tool, now, salt) for tool in inv.tools
+            }
             entry["instructions"] = _instructions_record(instructions, salt)
             outcome.pinned_tools += len(inv.tools)
             mark_dirty()
@@ -843,7 +880,7 @@ def check_pins(
                 evidence=text_diff(old_text, masked_instructions) or _SECRET_CHANGED,
             )
 
-        current_tools = {tool.name: tool for tool in inv.tools}
+        current_tools = {pin_key(tool.name): tool for tool in inv.tools}
         for tool_name, tool in current_tools.items():
             record = tools_entry.get(tool_name)
             if record is None:

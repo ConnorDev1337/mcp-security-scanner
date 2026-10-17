@@ -252,7 +252,9 @@ Prompts and resources:
 - Resource lists are often dynamic (files, database rows), so a new concrete resource is reported
   as *low*; new prompts and templates stay *medium*. `size` and `annotations.lastModified` follow
   the content and are not pinned.
-- Resources are keyed by their masked URI, so a credential in the URI never becomes a key.
+- Resources are keyed by their masked URI, and servers, tools and prompts by their masked name,
+  so a credential in an identifier never becomes a key (environment variable names kept for
+  launch diffs are masked the same way).
 - A kind that was not collected (a manifest without `prompts`, a failed listing) keeps its
   approved entries untouched instead of being reported as removed.
 
