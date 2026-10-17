@@ -1,6 +1,6 @@
 {
   "generator": "mcp-security-scanner/0.1.0",
-  "generated_at": "2026-10-16T23:34:01+00:00",
+  "generated_at": "2026-10-17T04:35:10+00:00",
   "servers": {
     "github": {
       "serverInfo": {
@@ -6225,6 +6225,190 @@
             },
             {
               "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAABn0lEQVRIie2Vvy5EURDGvyMUkhUU/pS2Q2clwvIKqL0Cm9ArrBcQShJPoLFR2YaIhIjQ7a7E39IiCgqVn8KsPY697E3oTHPumTPf990z986M9Mfm/A0wKGlMUlnSlnPuOQQAE5LOnXOFWErAIvBK1S6BZBAzZ2fzcckHjXwVaAXSwD2wWYN8A2iKK1ABt3m+ZeDRnseIthdgDxioxd1o662tfZIO7Lnf8xcklST1StqRdORxNEualHQIDDvnTmvdIGE5vwdWgLy93bQX0w0UgSdgKMC3AdfA7ndpSgKbduUbYBoI/7Ju4BiYrYFfAl4iBbxAgOyPgV9xWYDQ3xCXKK79C/wL/KJZoeW8QpsJCy0C54AMULaGmQu7sIAW4MpaxTKwbQU3U4dAxmLzwLpxXAIJP2jKgkY8Xx4o1SFwBmx7+7RxTUnVb9Bpa9HDFiR1/SRgWH+6FT3/h2qK6sBpB0aBB7yB880NcpaWtGHXjCsVBmb5PDIvgJ46BJKW84q9AguV87Adp/Q+9O8UMfQjRBKSxiV1SNp3zp3Ug/sVewPruexhKwhGXQAAAABJRU5ErkJggg==",
+              "mimeType": "image/png",
+              "theme": "dark"
+            }
+          ]
+        }
+      ],
+      "prompts": [
+        {
+          "arguments": [
+            {
+              "name": "repo",
+              "description": "The repository to assign tasks in (owner/repo).",
+              "required": true
+            }
+          ],
+          "description": "Assign GitHub Coding Agent to multiple tasks in a GitHub repository.",
+          "name": "AssignCodingAgent",
+          "icons": [
+            {
+              "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAAC2UlEQVRIicWVMUyTaRjHf/+vVUpOJOdilOYoUvVreq2CDmLOwdlAS5xMbrrhBifjYG7QjYuJw108nZx1huLgYlw0QshxChUK2koxHHcuCmgsFfieG0or3kGPSoz/8X3f5/97nvfN8z7wmaVqm9FodFfR/EnMugy5giCAwYwgI9Ff9Hl9L9Lp1zUBgsGO+rqGwnlhF4CdwBSyAUwvS1G220zHBSFgHtmVxYWvfp2ZGSj8LyAcjgfZphTQZtAr7OdsZvSP9RIJR+LtQhcNusF+d1aUfPp05M8NAavmg8AOk3cmN56+s1Hpa7U/cviUYbcw3jgex9ZCKoBgsKM+0PDuAdBq2He5zOiTzZiXtc+NxRw598GeLRcWTuTz+UUAp3ygrqFwHmgzeWdqNQd4PpFOy/gedNQfaDz3UQXRaHRX0fNPGdzNZUZO12q+VuHIoV7g5Hu/1/IinX7tABTNnwR2SvRsxRzAzOsBGuuWfAkoX5FZFzCVHR95tFVAbiI9DEwj6wLwl5YVMTRYLTDsxjuRrgGYYz/kxkbvbXRWMOBB24cKYI9ks1X8hXQDaAaa5XG9WjImZgV71wI+m8qAv8y0t1pSmP0ITANTmHO2qqvRZDALlTdgHKyjWkx2YvQ2cHtTacMxYBhWK5DoF4TCkXj7Jg02VKsbOwI0Y+qvALZrOQXMC13cKkDSJWBuJUCqAhgbG3uF7IpBcn/k8KlPNQ+78U5QQuhy/vHjuQoAYPndwi9gw4bd2ufGYrWatxz8No50ExhaKsz9Vl6vAPL5/KKzoiTGG0fOg1oqCbvxTp/juw/M+zynu/yTwjoD58CBQ02ez/pAR4E+M69ntf3/o1Y3dqR050oAQz7P6Z6cfPRRw647MkOhUMAfaDyH+AloBKYNPRT292rQHoMOSp09J3TZlt5ezWazxX97VR3638RiX9ct+RImSyBcrDT0ETMyMp4ptRIgVX7QL6J/ALSUEwJ5rdg2AAAAAElFTkSuQmCC",
+              "mimeType": "image/png",
+              "theme": "light"
+            },
+            {
+              "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAABxElEQVRIibWVvW4TURCFv0vlNEDcIHAkKAERJOIKSjoUArwBPwUFFaKIIngAJARCPIgdh4cgRBYt6ZIAEYEqdhpEw0fhCbkKa68dxyNtsfNzzpnZu3NhwpYGBdUqcA+4A1wEZiK0DawD74FWSml3JAJ1CngGLAIngU1gFfgZKWeAG8AFoAu8At6mlH6VtqTOqJ/UP2pDnRuQO6c27VlbrQ0Dvq121Fulag7q5qPmW18SdSqUd9Qrw4Jn9bNR21YrRQkvYixDKy/AuB3jWjocqKpdtXFU8AxrOTqZzp2PgvnaMRDUA+tB7mypG+OCZ3hbahPgRPguAR9LihaicEu9WcKxClzOi/fU1wPAk7rjgX0uEfNG3cs7mJjtE+wA5/olpZQEHgNf6K2NJyW4NeD7v7c4WptjSc0svlMjdzyM2fbdOyOA7x/T+7mzGj9H8xgIWuquevpw4HmsivkxwBdC/WJRsBKLqqPOHgH8aqybtcJlF0m1WLndUToJ5V31q9r3NOYk7Wh1Wa0PyK3HzA3l/4H3uzIrwFNgCThF7/x/AH5EylngOnAe6AAvgXcppd9DEWRE08DdeIou/RVgJaXUGYQzUfsL+zmwV7BtIq0AAAAASUVORK5CYII=",
+              "mimeType": "image/png",
+              "theme": "dark"
+            }
+          ]
+        },
+        {
+          "arguments": [
+            {
+              "name": "owner",
+              "description": "Repository owner",
+              "required": true
+            },
+            {
+              "name": "repo",
+              "description": "Repository name",
+              "required": true
+            },
+            {
+              "name": "title",
+              "description": "Issue title",
+              "required": true
+            },
+            {
+              "name": "description",
+              "description": "Issue description",
+              "required": true
+            },
+            {
+              "name": "labels",
+              "description": "Comma-separated list of labels to apply (optional)"
+            },
+            {
+              "name": "assignees",
+              "description": "Comma-separated list of assignees (optional)"
+            }
+          ],
+          "description": "Create an issue for a problem and then generate a pull request to fix it",
+          "name": "issue_to_fix_workflow",
+          "icons": [
+            {
+              "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAAC2UlEQVRIicWVMUyTaRjHf/+vVUpOJOdilOYoUvVreq2CDmLOwdlAS5xMbrrhBifjYG7QjYuJw108nZx1huLgYlw0QshxChUK2koxHHcuCmgsFfieG0or3kGPSoz/8X3f5/97nvfN8z7wmaVqm9FodFfR/EnMugy5giCAwYwgI9Ff9Hl9L9Lp1zUBgsGO+rqGwnlhF4CdwBSyAUwvS1G220zHBSFgHtmVxYWvfp2ZGSj8LyAcjgfZphTQZtAr7OdsZvSP9RIJR+LtQhcNusF+d1aUfPp05M8NAavmg8AOk3cmN56+s1Hpa7U/cviUYbcw3jgex9ZCKoBgsKM+0PDuAdBq2He5zOiTzZiXtc+NxRw598GeLRcWTuTz+UUAp3ygrqFwHmgzeWdqNQd4PpFOy/gedNQfaDz3UQXRaHRX0fNPGdzNZUZO12q+VuHIoV7g5Hu/1/IinX7tABTNnwR2SvRsxRzAzOsBGuuWfAkoX5FZFzCVHR95tFVAbiI9DEwj6wLwl5YVMTRYLTDsxjuRrgGYYz/kxkbvbXRWMOBB24cKYI9ks1X8hXQDaAaa5XG9WjImZgV71wI+m8qAv8y0t1pSmP0ITANTmHO2qqvRZDALlTdgHKyjWkx2YvQ2cHtTacMxYBhWK5DoF4TCkXj7Jg02VKsbOwI0Y+qvALZrOQXMC13cKkDSJWBuJUCqAhgbG3uF7IpBcn/k8KlPNQ+78U5QQuhy/vHjuQoAYPndwi9gw4bd2ufGYrWatxz8No50ExhaKsz9Vl6vAPL5/KKzoiTGG0fOg1oqCbvxTp/juw/M+zynu/yTwjoD58CBQ02ez/pAR4E+M69ntf3/o1Y3dqR050oAQz7P6Z6cfPRRw647MkOhUMAfaDyH+AloBKYNPRT292rQHoMOSp09J3TZlt5ezWazxX97VR3638RiX9ct+RImSyBcrDT0ETMyMp4ptRIgVX7QL6J/ALSUEwJ5rdg2AAAAAElFTkSuQmCC",
+              "mimeType": "image/png",
+              "theme": "light"
+            },
+            {
+              "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAABxElEQVRIibWVvW4TURCFv0vlNEDcIHAkKAERJOIKSjoUArwBPwUFFaKIIngAJARCPIgdh4cgRBYt6ZIAEYEqdhpEw0fhCbkKa68dxyNtsfNzzpnZu3NhwpYGBdUqcA+4A1wEZiK0DawD74FWSml3JAJ1CngGLAIngU1gFfgZKWeAG8AFoAu8At6mlH6VtqTOqJ/UP2pDnRuQO6c27VlbrQ0Dvq121Fulag7q5qPmW18SdSqUd9Qrw4Jn9bNR21YrRQkvYixDKy/AuB3jWjocqKpdtXFU8AxrOTqZzp2PgvnaMRDUA+tB7mypG+OCZ3hbahPgRPguAR9LihaicEu9WcKxClzOi/fU1wPAk7rjgX0uEfNG3cs7mJjtE+wA5/olpZQEHgNf6K2NJyW4NeD7v7c4WptjSc0svlMjdzyM2fbdOyOA7x/T+7mzGj9H8xgIWuquevpw4HmsivkxwBdC/WJRsBKLqqPOHgH8aqybtcJlF0m1WLndUToJ5V31q9r3NOYk7Wh1Wa0PyK3HzA3l/4H3uzIrwFNgCThF7/x/AH5EylngOnAe6AAvgXcppd9DEWRE08DdeIou/RVgJaXUGYQzUfsL+zmwV7BtIq0AAAAASUVORK5CYII=",
+              "mimeType": "image/png",
+              "theme": "dark"
+            }
+          ]
+        }
+      ],
+      "resources": [
+        {
+          "description": "MCP App UI for the get_me tool",
+          "mimeType": "text/html;profile=mcp-app",
+          "name": "get_me_ui",
+          "uri": "ui://github-mcp-server/get-me"
+        },
+        {
+          "description": "MCP App UI for creating and updating GitHub issues",
+          "mimeType": "text/html;profile=mcp-app",
+          "name": "issue_write_ui",
+          "uri": "ui://github-mcp-server/issue-write"
+        },
+        {
+          "description": "MCP App UI for editing GitHub pull requests",
+          "mimeType": "text/html;profile=mcp-app",
+          "name": "pr_edit_ui",
+          "uri": "ui://github-mcp-server/pr-edit"
+        },
+        {
+          "description": "MCP App UI for creating GitHub pull requests",
+          "mimeType": "text/html;profile=mcp-app",
+          "name": "pr_write_ui",
+          "uri": "ui://github-mcp-server/pr-write"
+        }
+      ],
+      "resourceTemplates": [
+        {
+          "description": "Repository Content",
+          "name": "repository_content",
+          "uriTemplate": "repo://{owner}/{repo}/contents{/path*}",
+          "icons": [
+            {
+              "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAABTklEQVRIie2UPUvDUBSGn5PW2qnYwUXExWhNpY2CUKT+BB10E3R0dnbrppuKLgouHbr5X5qlKRIFB+cuguBHj4O05KYfNsVJ+m7n3Hue54ZcrhDKQqGQTX1YVwg7QIbx0gh8b7VTJMMrqS+5RtgD7oDX2GhhC6UcbhkCVLZVuX1sesex4YCdX6uAGgIrsicjlrTGgQ9KVPDnmQgmgongPwgkXNiOq8ADMAtkx4UGvtflJvus20ANeIlN/vW5/kkt8L3D2HD6P9dRgSI8dQcc9w1IR3acBE3vbFSp8ZMVnoFSqJ/unZDe3pAYXyDIJarn9opbDZrewaAh2y7Oy5S1r6h5QG2Xxbw3piDw6xe244oKyxFmC5ihc+tS1qaqngKJyAEBGmZvSGzHVYT790T7aPozsaFoFZGboFGvDJsbOYuOuxuuc7n1uaV8sRSH8Q1DUVLnYLty3gAAAABJRU5ErkJggg==",
+              "mimeType": "image/png",
+              "theme": "light"
+            },
+            {
+              "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAAA+ElEQVRIie2WLU5DQRRGzwUEirQCQ9BsoSGtZQHgSFgIsg4JXQCGP8V2QCBIEATZkJDgOJi+MJnMo30TFHmfmzvzfeeKyZ2BROpQvVHfrddDmhkZ4BY4Ai6BD7prAowjIoq7i85nFcGNf6qa1tayM1vAvBZQUg74c/WAHtAD/gMgn6YCT8A2MKwOTaZpCfAF3AGvFdlLx7XqdUVw4186rgWeE8Nn4cU67QLNAS/ASG3qmwVPqdaqjWw9A86BK+CkzaTuAseFBse/AiLiQg1gLzs3Bwb8XIp94AxYL/Af2xordap6v/htHKhv6nTlgBUAh9l6Rx11yfgG8ne/zwh2OysAAAAASUVORK5CYII=",
+              "mimeType": "image/png",
+              "theme": "dark"
+            }
+          ]
+        },
+        {
+          "description": "Repository Content for specific branch",
+          "name": "repository_content_branch",
+          "uriTemplate": "repo://{owner}/{repo}/refs/heads/{branch}/contents{/path*}",
+          "icons": [
+            {
+              "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAACjUlEQVRIicWVTUhUURTHf+e+5weEVsokswnFJ+O8cCYMCkxrUYsioW1E7dyF0E4IDHXRok1BRYsiiGrTJtAIEqIiySDTwdBRGLVd6sig0MKPmXda2OiQ88Sv6KzOO+d/z++ee967D/6xyd+B6tq6Y0akEWW20Mr0jIyM/NqsQCgUKvGkqBlDQJW+RHx40BfguNFOlPac+JTl6Znx8eGp/MUjVRkj74CqPyFFpCsxGuvIakzuzlHaRXjkLdkHVOUkaGnGcMdv9xkxd0FLUdOQLpKDoI9RvemEI/UbACJWEyArhdI2OfltYWIs9lkxz0FO+56P6CngWWJsqP9HLDa/bGsbIAJNGwHqzQBYi7jrFbwjCjN+9VdzsqYvWLZcAC9njZ11Cq1Mz5JnT4l43dW10ReIuoKcBbnm2wByD/S+E472qhIX0SsIk8WSeZ3VWFknmUwuB8orulVwDXJJxRQLciMRjz30A6TmpgfKAsEkygUjNALvbZXL8fj3Wb81ADjhqDru0Y5NRbl6N9rphKNevpzJF9y2KRHgZ76UnS+4VXOcE6XYiy3ARVQ7twVQ5bgTjo4DNeT54ldtMeu83L+v4Na2AIKeR3iL8spPg+oCmP7EWOyDn8T/iEQmEqOxc775LZrvkBV5s9vimwIETe0FwMp9CIUiVQcDwacClYrWlAeCK6m56YE9AYRCoZK0Kfgioo6KeSKrb05rWSCYTM1Nf90pYG3InhQ1C1SiVsPE2FA/gBOO9iraCjzYKWB9BsIhgHSxxrMhRUYFKnZaHHI6UPgEqL3k3T5cV9dWsGy5gl4F/bgbwFoHifjwICJdIC2FaZMSo30I87aa67sBbLgCnHCkXoRGPJJb+en/d/sN+mTh5OWORQYAAAAASUVORK5CYII=",
+              "mimeType": "image/png",
+              "theme": "light"
+            },
+            {
+              "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAABkUlEQVRIicWVvU4CQRSFz5DYiWKhttJiYgEV6iOYWPsKUmh8AnkCsZQ3sFJjYgI2FiZ2xsqfRDRWxl9itLDis/CKI+5OQCCeZnbPnnvPnZ25M1Kf4VoJICdpVtK9pF3n3FsoAZCUNCdpVNKhc+44JC4CDb5xBaQD+rRpvtAAVuPEORNsAMPANPAIbAcMdkyTB1JA2XJko8TLVkXK40pAPWBQB9a89xHLsfTFJTz9nY0Zj5v0+CjctegzHv+rmkH7n4/AOrBv1SwGZlAwTdVinoAaMBgXkAa2gXfgBlgEfu00T+/MpAa8AlvARGDGzUBid0O0vgg0or4losg/YErSbc8NgCFgRdK8pHIngQB7wEVL48VhExiIyhW5gAD2WJF0EqjlRdKRc+6g7eq9GVx2FBSD0Brs9dvguRcGP2CNtuM1WiHUaJ0mTwLXdlSUgIqtRaFXBguWMO9xVeC8m7z+GozZeOZxp5LGuzFoAshaU5XtXJ+x0zH2wvmLyWpL59baOh0DiLr0s/q89B/UxqX/7/gAj6/Ekn4d+MEAAAAASUVORK5CYII=",
+              "mimeType": "image/png",
+              "theme": "dark"
+            }
+          ]
+        },
+        {
+          "description": "Repository Content for specific pull request",
+          "name": "repository_content_pr",
+          "uriTemplate": "repo://{owner}/{repo}/refs/pull/{prNumber}/head/contents{/path*}",
+          "icons": [
+            {
+              "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAACwUlEQVRIie2Vz28UZRjHP993pi0QIC3YahNjirtmd3bS3Q1eUHvQEPUiEv8A4kXjwRJ78MCFBLjBBRKCHowHE38cNCbGGx6IUoKiodtNpoNmTJp4oSJNQ3pw29l5POxus2wo3QTwxPc0887zfD7zvu9kXnjEUfdNrjj5vJOmMP4e9JrfR1G02tuQD8tvgpck0dxCPwK30ViqnJTcr4bOmfRlI/PrhUJ5313woDpDpu8ss7f6nYHrvDnGcYlPsoY/bKaXwHY3HWfvgmNnMX0zvMM7069A3c3pkEYWa7UVgFxQPSfs7SSeH3k2rEy5jMubMBoG1yQ+SBbm53of+gCybMkk/H8VAFdbZisZLAFsJ11oyL+BUURcwrjWAZixXeIwxs/5UuVAr0QAYRjubGR+HWy3mb6QCIBXQe8nce0jgIkwfMo3/xLG085x8I9ofkMyUa0O+w2rgS0mcf3lboEDiKJo1cvsIDDr4D1DhTb8407hYhTdTJW+AvrdMnuhG9Je1m9BBzbfjXbyQcXypeqJLQt7+0rVE/mgYr3j7l7FDzOPBY8FDx6vc1EolPeNjI5/Jpgw7Lm9o+Pry//c/K0PhnLFyrSMDxE79jwxvn9079gvt28vrUD7V1EoFHalbltd2C7DfS4sAF4DTSdx7cL96LliZVriPPADuL+geRh0Z8il5SiKVn2ATENvCCYw78U/b8xdBcgHlYuGHQXuK5A4ClxM4vnXW8Lqp5JdWWt6h4CvWnsgxgDSbRZ3Gg0tCJ7sY4nGwDZOt/WBZtzN9FswLgM2sGann5mcPDaw5pWEHQH7cUu86SdkR3LF6tfrA814MNVpwNrM1leUxPXrSKfMeHcwdctyNotY8c3NbMX3LJsB3ZHsymDqlkHvYHYyievXWxPpSj4o75eYIuPWZof+vRKG4c61pncIx6gZsx34/5L/ACy3ElqUYhuvAAAAAElFTkSuQmCC",
+              "mimeType": "image/png",
+              "theme": "light"
+            },
+            {
+              "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAABn0lEQVRIie2Vvy5EURDGvyMUkhUU/pS2Q2clwvIKqL0Cm9ArrBcQShJPoLFR2YaIhIjQ7a7E39IiCgqVn8KsPY697E3oTHPumTPf990z986M9Mfm/A0wKGlMUlnSlnPuOQQAE5LOnXOFWErAIvBK1S6BZBAzZ2fzcckHjXwVaAXSwD2wWYN8A2iKK1ABt3m+ZeDRnseIthdgDxioxd1o662tfZIO7Lnf8xcklST1StqRdORxNEualHQIDDvnTmvdIGE5vwdWgLy93bQX0w0UgSdgKMC3AdfA7ndpSgKbduUbYBoI/7Ju4BiYrYFfAl4iBbxAgOyPgV9xWYDQ3xCXKK79C/wL/KJZoeW8QpsJCy0C54AMULaGmQu7sIAW4MpaxTKwbQU3U4dAxmLzwLpxXAIJP2jKgkY8Xx4o1SFwBmx7+7RxTUnVb9Bpa9HDFiR1/SRgWH+6FT3/h2qK6sBpB0aBB7yB880NcpaWtGHXjCsVBmb5PDIvgJ46BJKW84q9AguV87Adp/Q+9O8UMfQjRBKSxiV1SNp3zp3Ug/sVewPruexhKwhGXQAAAABJRU5ErkJggg==",
+              "mimeType": "image/png",
+              "theme": "dark"
+            }
+          ]
+        },
+        {
+          "description": "Repository Content for specific tag",
+          "name": "repository_content_tag",
+          "uriTemplate": "repo://{owner}/{repo}/refs/tags/{tag}/contents{/path*}",
+          "icons": [
+            {
+              "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAABgklEQVRIicXUzS7EUBjG8f85TYQVlzChmjGTMWJj6+MSWIqVzMYKG6zYsGThUmxEfCzsJCgx0zTDFbgBi3NeG51MhranM8SzbN8+vzZ9W/jjKAC/MnOIyDYwlDPf1MYux/FzVAyYqn+guEO4zRoWWAPwjF10RRJAUOqg3XzczxoeL9cDrbgGPBRL7Wb4kgdol7tI8haFsRUWAINw6Vfq1V8F+kFSgVKpNOxPzWxMVqbnBkFSAW94dB3kVESdDfIkqYDWcge8I5ynzbgghbYoLVnbVfgl/5S3KIy1sUsCVoSLIKiVe4EXEWl0nyiaOH6OPGMXAYynryaqs34H0MauJCd+A1EwpqzZ7QC9+iCI9XQDGBHhoQMkiAjzCsR6+sblK+2NX6kfAZsgJ69ReApfW9Sdfv43nXJhB+Sk3XraTI5/A/pB0spTgSJIVnkm4ILklecCWYhLuRPwEwKsupQ7AwBBUCsbT18pGANGgON2K9zKu84ZAJiozvrKmD2B+2TP/z2fmn7za1yyQLYAAAAASUVORK5CYII=",
+              "mimeType": "image/png",
+              "theme": "light"
+            },
+            {
+              "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAAA/klEQVRIicWUMQ4BQRSG/1E5iIjEAdS4hwtwCBUdJ+AeIjqdlkT0REItUfBpRiLszM6MDa+ZZOfN9+3bN2+lXwQwAK7kxwaoxbCNFVwlrSQtc/I7dm0ZY7YxFQD0A/KqwB44AvUQdin4LSQZY3aSmpJukhYhkihBisQpAMpAF2h8K8nsAdCzz0+ec7k98X2ilaSzpJkrIbiS0FvkCl8l0U3OCltJW9Jd0vxjGIE1cIid0vcAapZzACqujSIkF2DisydLgJHtaS9rM/pX8HZ+aOFjX1KSJAieKomCx0qS4KGSr+B5kkLgLkmh8BfJc04uFj4qDP4iqQDTzCH6VzwAiELCiF8OvUMAAAAASUVORK5CYII=",
+              "mimeType": "image/png",
+              "theme": "dark"
+            }
+          ]
+        },
+        {
+          "description": "Repository Content for specific commit",
+          "name": "repository_content_commit",
+          "uriTemplate": "repo://{owner}/{repo}/sha/{sha}/contents{/path*}",
+          "icons": [
+            {
+              "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAABdUlEQVRIie2TP0xaURTGf+dRUyB1cKmJsvXy50ng0rw4OLkxNd2ta1PSqY1zR2IcO5q4GpOuxsShg2xWFwOWUEIHB9K40qaUVHnHhbQUwoNUBwd+0835zvd99w4Xpky5LTLp4oLnRcOdbhrgdyvyudk8/nUnBbHYSiQ8+3MTpABEeuM2wnbne/TduKLAAs/zZlrtq48gq4juic8BgDo8Q+UFwlHs8Vy+VCpdT/KaIUzKbhjX6pNU7tWgFl+yBeNaNW7u7X+FAxjXVoxrPwXoJ3E3Vw7KeNAfBmSGV/T9KLMix6BvjGt1QDr/Witn/ykQlS0VzQ4svlac+VEFDjqv0AK2++eiUvlzHmUGMK79AORDvpOu18++9WuJhF30Q1QFDhu18troSwTgq18EIl1H9xOJTOpveCblh9gHHqpQDMoY+w9MOvscX3aBR0CjN44DP0RZb3wpH9yqACCZfLrQFf8lwnLPdHrlXO9cVKuXk/inTLnn3AAE2G1umJdlCgAAAABJRU5ErkJggg==",
+              "mimeType": "image/png",
+              "theme": "light"
+            },
+            {
+              "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABmJLR0QA/wD/AP+gvaeTAAAA+UlEQVRIie2TPU4CURSFzzNS4AZIdAMkZKZzF4ae3mjojKuwIbQm1oSwCWI3QKRgYsMO6BASxWo+mmvEYXxMHAqL+ZJbvPtzzs1NnlRSUhSXtxE4k9Sw56tzbnOUDYAq0AU++OYd6ADVouIV4NlEe0DLome5IXBaxODehG4yardWuytiEAMjT30MzHwaJymxH0gKJEWe+UhSmJ4D4q+G3fs9SApTAm1JNY9BTdJK0mMqH2f07gMMgCVwnlG7AN6Afi6xXwwC4BN4Aeo7+TowBTZAw6eRx6QJrIEEmFskwAq4OjSf6yfbia4lXVpqIunJObf4++olJf+GLdXO7LokfYRNAAAAAElFTkSuQmCC",
               "mimeType": "image/png",
               "theme": "dark"
             }

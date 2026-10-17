@@ -1,0 +1,45 @@
+{
+  "generator": "mcp-security-scanner/0.1.0",
+  "generated_at": "2026-10-17T04:35:10+00:00",
+  "servers": {
+    "sentry": {
+      "serverInfo": {
+        "name": "sentry",
+        "version": "0.4.1"
+      },
+      "tools": [
+        {
+          "name": "get_sentry_issue",
+          "description": "Retrieve and analyze a Sentry issue by ID or URL. Use this tool when you need to:\n                - Investigate production errors and crashes\n                - Access detailed stacktraces from Sentry\n                - Analyze error patterns and frequencies\n                - Get information about when issues first/last occurred\n                - Review error counts and status",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "issue_id_or_url": {
+                "type": "string",
+                "description": "Sentry issue ID or URL to analyze"
+              }
+            },
+            "required": [
+              "issue_id_or_url"
+            ]
+          }
+        }
+      ],
+      "prompts": [
+        {
+          "name": "sentry-issue",
+          "description": "Retrieve a Sentry issue by ID or URL",
+          "arguments": [
+            {
+              "name": "issue_id_or_url",
+              "description": "Sentry issue ID or URL",
+              "required": true
+            }
+          ]
+        }
+      ],
+      "resources": [],
+      "resourceTemplates": []
+    }
+  }
+}

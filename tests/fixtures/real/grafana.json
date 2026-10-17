@@ -1,6 +1,6 @@
 {
   "generator": "mcp-security-scanner/0.1.0",
-  "generated_at": "2026-10-16T23:38:30+00:00",
+  "generated_at": "2026-10-17T04:35:10+00:00",
   "servers": {
     "grafana": {
       "serverInfo": {
@@ -3581,7 +3581,48 @@
           },
           "name": "validate_provisioning_file"
         }
-      ]
+      ],
+      "prompts": [],
+      "resources": [
+        {
+          "_meta": {
+            "ui": {
+              "csp": {
+                "connectDomains": [],
+                "resourceDomains": [
+                  "data:"
+                ]
+              },
+              "permissions": {
+                "clipboardWrite": {}
+              }
+            }
+          },
+          "description": "Interactive trace waterfall and span details",
+          "mimeType": "text/html;profile=mcp-app",
+          "name": "Grafana trace",
+          "size": 660259,
+          "title": "Grafana trace",
+          "uri": "ui://grafana/trace.html"
+        },
+        {
+          "_meta": {
+            "ui": {
+              "csp": {
+                "connectDomains": [],
+                "resourceDomains": [
+                  "data:"
+                ]
+              }
+            }
+          },
+          "description": "Interactive HTML viewer for Grafana panel images",
+          "mimeType": "text/html;profile=mcp-app",
+          "name": "Panel Viewer",
+          "uri": "ui://mcp-grafana/panel-viewer.html"
+        }
+      ],
+      "resourceTemplates": []
     }
   }
 }
