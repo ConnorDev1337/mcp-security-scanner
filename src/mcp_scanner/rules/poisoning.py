@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import bisect
 import re
 from collections import defaultdict
 from collections.abc import Callable, Iterator
@@ -58,6 +59,9 @@ class _Pattern:
     severity: Severity | None = None
     raw: bool = False  # Match the text before normalization (hidden characters stripped).
     unless: re.Pattern[str] | None = None  # Discard matches whose sentence matches this.
+    # Every match ends with this literal, so the text after its last occurrence is not
+    # searched: a start there could only fail after scanning the rest of the text.
+    tail: str | None = None
 
 
 def _n(
@@ -70,9 +74,12 @@ def _n(
     return _Pattern(rule_id, re.compile(pattern), severity, unless=unless)
 
 
-def _r(rule_id: str, pattern: str, severity: Severity | None = None) -> _Pattern:
+def _r(
+    rule_id: str, pattern: str, severity: Severity | None = None, tail: str | None = None
+) -> _Pattern:
     """Build a case-insensitive pattern matched against the non-normalized text."""
-    return _Pattern(rule_id, re.compile(pattern, re.IGNORECASE | re.DOTALL), severity, raw=True)
+    flags = re.IGNORECASE | re.DOTALL
+    return _Pattern(rule_id, re.compile(pattern, flags), severity, raw=True, tail=tail)
 
 
 _NEG = r"(?:do\s+not|don't|dont|never|must\s+not|mustn't|should\s+not|shouldn't|avoid)"
@@ -272,7 +279,7 @@ PATTERNS: tuple[_Pattern, ...] = (
         Severity.MEDIUM,
     ),
     # MCPS107 hidden content (matched before normalization)
-    _r("MCPS107", r"<!--.*?-->"),
+    _r("MCPS107", r"<!--.*?-->", tail="-->"),
     _r(
         "MCPS107",
         r"display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(?:px|pt|em|rem)?"
@@ -342,11 +349,40 @@ def _decode_base64(blob: str) -> str | None:
     return text if len(text) >= 8 and printable / len(text) >= 0.9 else None
 
 
-def _sentence(text: str, start: int, end: int) -> str:
-    """Return the sentence of ``text`` that contains ``text[start:end]``."""
-    lo = max(text.rfind(mark, 0, start) for mark in ".!?") + 1
-    ends = [i for i in (text.find(mark, end) for mark in ".!?") if i >= 0]
-    return text[lo : min(ends, default=len(text))].strip()
+_SENTENCE_END = re.compile(r"[.!?]")
+
+
+def _matches(pattern: _Pattern, subject: str) -> list[re.Match[str]]:
+    """Return the matches of ``pattern`` in ``subject`` that its ``unless`` does not discard.
+
+    ``unless`` is tested on the sentence that contains the match, found by bisecting
+    the sentence ends and evaluated once per sentence, so the cost stays linear when
+    one long sentence holds many matches.
+    """
+    end = len(subject)
+    if pattern.tail is not None:
+        last = subject.rfind(pattern.tail)
+        if last < 0:
+            return []
+        end = last + len(pattern.tail)
+    matches = list(pattern.regex.finditer(subject, 0, end))
+    if pattern.unless is None or not matches:
+        return matches
+    marks = [mark.start() for mark in _SENTENCE_END.finditer(subject)]
+    verdicts: dict[tuple[int, int], bool] = {}
+    kept = []
+    for match in matches:
+        before = bisect.bisect_left(marks, match.start())
+        after = bisect.bisect_left(marks, match.end())
+        bounds = (
+            marks[before - 1] + 1 if before else 0,
+            marks[after] if after < len(marks) else len(subject),
+        )
+        if bounds not in verdicts:
+            verdicts[bounds] = bool(pattern.unless.search(subject[bounds[0] : bounds[1]].strip()))
+        if not verdicts[bounds]:
+            kept.append(match)
+    return kept
 
 
 def scan_text(text: str, kind: str, _depth: int = 0) -> list[TextHit]:
@@ -372,12 +408,7 @@ def scan_text(text: str, kind: str, _depth: int = 0) -> list[TextHit]:
         if kind == "instructions" and pattern.rule_id == "MCPS108":
             continue  # Server instructions legitimately address the model.
         subject = stripped if pattern.raw else normalized
-        matches = [
-            match
-            for match in pattern.regex.finditer(subject)
-            if pattern.unless is None
-            or not pattern.unless.search(_sentence(subject, match.start(), match.end()))
-        ]
+        matches = _matches(pattern, subject)
         if matches:
             first = matches[0]
             add(

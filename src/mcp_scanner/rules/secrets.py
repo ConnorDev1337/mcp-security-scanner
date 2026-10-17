@@ -6,6 +6,7 @@ Detected values are always redacted before they reach a Finding, so reports
 
 from __future__ import annotations
 
+import bisect
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -56,8 +57,9 @@ KNOWN_SECRETS: tuple[SecretPattern, ...] = (
     ),
 )
 
-_REFERENCE = re.compile(
-    r"\$\{[^}]+\}|^\$[A-Za-z_][A-Za-z0-9_]*$|^%[A-Za-z_][A-Za-z0-9_]*%$|^\{\{.*\}\}$|^<[^>]*>$"
+_BRACED_REFERENCE = re.compile(r"\$\{[^}]+\}")
+_WHOLE_REFERENCE = re.compile(
+    r"^(?:\$[A-Za-z_][A-Za-z0-9_]*|%[A-Za-z_][A-Za-z0-9_]*%|\{\{.*\}\}|<[^>]*>)$"
 )
 _PLACEHOLDER = re.compile(
     r"(?i)^(?:x+|\*+|\.+|-+|changeme|change[-_ ]?me|placeholder|example|sample|dummy|test|"
@@ -78,7 +80,9 @@ _NOT_SECRET_KEY = re.compile(
 )
 _SENSITIVE_HEADER = re.compile(
     r"(?i)^(?:authorization|proxy-authorization|cookie|"
-    r"x-[\w-]*(?:key|token|secret|auth)[\w-]*|[\w-]*api[-_]?key)$"
+    # The lookahead finds the keyword once; "x-[\w-]*(?:key|...)[\w-]*$" re-scanned the
+    # rest of the name for every keyword occurrence.
+    r"x-(?=[\w-]*(?:key|token|secret|auth))[\w-]*|[\w-]*api[-_]?key)$"
 )
 _AUTH_SCHEME = re.compile(r"(?i)^(?:bearer|basic|token|apikey|api-key)\s+")
 _CRED_FLAG = re.compile(
@@ -89,13 +93,22 @@ _SENSITIVE_PARAM = re.compile(
     r"(?i)^(?:access_token|token|api_?key|apikey|key|secret|client_secret|password|pass|pwd|auth|"
     r"sig|signature|code|session|jwt)$"
 )
-_URL = re.compile(r"[A-Za-z][A-Za-z0-9+.\-]*://[^\s\"'<>]+")
+# The scheme is bounded: with "[A-Za-z0-9+.\-]*" every position of a long run of letters
+# re-scanned the rest of the run looking for "://" (quadratic time).
+_URL = re.compile(r"[A-Za-z][A-Za-z0-9+.\-]{0,31}://[^\s\"'<>]+")
+# A URL in text whose provider tokens are already redacted: "ghp_****(40 chars)" holds a
+# space, which must not end the URL before the credentials that follow the token.
+_REDACTED = r"\*\*\*\*\([0-9]{1,9} chars\)"  # What redact() leaves of a long value.
+_MASKED_URL = re.compile(rf"[A-Za-z][A-Za-z0-9+.\-]{{0,31}}://(?:[^\s\"'<>*]+|{_REDACTED}|\*)+")
+_REDACTED_TOKEN = re.compile(_REDACTED)
 # A whole PEM private key: the header, the body (with legacy encryption headers and
 # newlines possibly escaped as "\n") and the footer, or the base64 that follows a header
-# without footer.
+# without footer. The body cannot contain "-----", so a header without footer scans up
+# to the next boundary only instead of the rest of the text.
 _PRIVATE_KEY_BLOCK = re.compile(
     r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----"
-    r"(?:[A-Za-z0-9+/=\s:,.\\-]*?-----END (?:[A-Z0-9]+ )*PRIVATE KEY-----|[A-Za-z0-9+/=\s\\]*)"
+    r"(?:(?:(?!-----)[A-Za-z0-9+/=\s:,.\\-])*-----END (?:[A-Z0-9]+ )*PRIVATE KEY-----"
+    r"|[A-Za-z0-9+/=\s\\]*)"
 )
 _ENV_ASSIGNMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.+)$")
 
@@ -106,7 +119,11 @@ def is_reference(value: str) -> bool:
     References are ``${VAR}`` anywhere in the value, or a whole value of the form
     ``$VAR``, ``%VAR%``, ``{{x}}`` or ``<x>``.
     """
-    return bool(_REFERENCE.search(value.strip()))
+    value = value.strip()
+    # No "${" after the last "}" can be closed: searching only up to it keeps the cost
+    # linear on inputs such as "${${${...".
+    end = value.rfind("}") + 1
+    return bool((end and _BRACED_REFERENCE.search(value, 0, end)) or _WHOLE_REFERENCE.match(value))
 
 
 def is_placeholder(value: str) -> bool:
@@ -136,18 +153,23 @@ def looks_secret(value: str) -> bool:
 def find_known_secrets(text: str) -> list[tuple[SecretPattern, str]]:
     """Return non-overlapping ``(pattern, value)`` matches of provider-format secrets."""
     found: list[tuple[SecretPattern, str]] = []
-    taken: list[tuple[int, int]] = []
+    # Disjoint spans already taken, sorted: the last one starting before a match ends
+    # is the only one that can overlap it.
+    starts: list[int] = []
+    ends: list[int] = []
     for pattern in KNOWN_SECRETS:
         for match in pattern.regex.finditer(text):
-            span = match.span()
-            if any(span[0] < end and start < span[1] for start, end in taken):
+            start, end = match.span()
+            index = bisect.bisect_left(starts, end)
+            if index and ends[index - 1] > start:
                 continue
             value = match.group()
             if pattern.label != "Private key" and (
                 _PLACEHOLDER_PART.search(value) or shannon_entropy(value) < 3.0
             ):
                 continue
-            taken.append(span)
+            starts.insert(index, start)
+            ends.insert(index, end)
             found.append((pattern, value))
     return found
 
@@ -215,7 +237,8 @@ def _mask_url(url: str, spans: list[MaskedSpan], legacy: bool) -> str:
         password = parts.password
     except ValueError:
         return url
-    if password and not is_reference(password):
+    # A password already redacted as a provider token ("ghp_****(40 chars)") stays as is.
+    if password and not is_reference(password) and not _REDACTED_TOKEN.search(password):
         masked = url.replace(f":{password}@", ":****@", 1)
         if masked != url:
             placeholder = is_placeholder(password)
@@ -253,7 +276,8 @@ def mask_spans(text: str, *, legacy: bool = False) -> tuple[str, list[MaskedSpan
     for pattern, secret in find_known_secrets(text):
         spans.append(MaskedSpan("token", pattern.label, secret, pattern.severity))
         text = text.replace(secret, redact(secret))
-    text = _URL.sub(lambda match: _mask_url(match.group(), spans, legacy), text)
+    urls = _URL if legacy else _MASKED_URL
+    text = urls.sub(lambda match: _mask_url(match.group(), spans, legacy), text)
     return text, spans
 
 

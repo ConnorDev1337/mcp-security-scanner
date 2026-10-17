@@ -33,8 +33,11 @@ CODE_FLAGS = {
 _POSIX_META = re.compile(r"[|;&<>`\n]|\$\(")
 _CMD_META = re.compile(r"[|&<>^\n]")
 _PS_META = re.compile(r"[|;&<>`\n]|\$\(|\biex\b|invoke-expression", re.IGNORECASE)
+# The gap before the pipe is bounded: unbounded, every "curl" re-scanned the rest of the
+# command line up to the next pipe (quadratic time on "curl curl curl ...").
 _DOWNLOAD_EXEC = re.compile(
-    r"\b(?:curl|wget|iwr|irm|invoke-webrequest|invoke-restmethod)\b[^|]*\|\s*(?:sudo\s+)?"
+    r"\b(?:curl|wget|iwr|irm|invoke-webrequest|invoke-restmethod)\b[^|]{0,500}+\|\s*"
+    r"(?:sudo\s+)?"
     r"(?:sh|bash|zsh|dash|python[\d.]*|node|perl|ruby|iex|invoke-expression|pwsh|powershell)\b"
     r"|\biex\s*\(\s*(?:new-object\s+net\.webclient|\(?\s*(?:iwr|irm|invoke-webrequest|"
     r"invoke-restmethod))"
