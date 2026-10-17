@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -177,6 +178,13 @@ def test_rules_command(capsys):
     assert len(json.loads(out)) >= 30
     _, out, _ = run(capsys, "rules", "-f", "markdown")
     assert out.startswith("| ID |")
+
+
+def test_readme_rule_table_matches_catalog(capsys):
+    readme = (Path(__file__).resolve().parent.parent / "README.md").read_text(encoding="utf-8")
+    _, out, _ = run(capsys, "rules", "-f", "markdown")
+    rows = out.splitlines()[2:]
+    assert rows and [row for row in rows if row not in readme] == []
 
 
 def test_discover_command(capsys, tmp_path, monkeypatch):
