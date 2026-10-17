@@ -77,6 +77,7 @@ def test_prompt_and_resource_findings_point_to_manifest_lines(fixtures):
 
 
 def test_benign_prompts_and_resources_have_no_findings(fixtures):
+    # Edge cases written by hand; real servers' listings are in tests/test_real_corpus.py.
     inventories, notices = load_manifest(str(fixtures / "tools" / "benign_prompts.json"))
     assert not notices
     assert analyze([], inventories) == []
