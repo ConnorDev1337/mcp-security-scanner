@@ -1,0 +1,3641 @@
+{
+  "generator": "mcp-security-scanner/0.1.0",
+  "generated_at": "2026-10-17T04:35:10+00:00",
+  "servers": {
+    "git-cyanheads": {
+      "serverInfo": {
+        "name": "@cyanheads/git-mcp-server",
+        "version": "2.15.3"
+      },
+      "tools": [
+        {
+          "name": "git_add",
+          "title": "Git Add",
+          "description": "Stage files for commit. Add file contents to the staging area (index) to prepare for the next commit.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "paths": {
+                "default": [],
+                "description": "Array of file or directory paths to stage (relative to repository root). Use [\".\"] to stage all changes. Paths must not start with \"-\" — use \"./-name\" for filenames starting with a dash. Can be omitted when all or update is true.",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "File path (must not start with \"-\")."
+                }
+              },
+              "update": {
+                "default": false,
+                "description": "Stage only modified and deleted files (skip untracked files).",
+                "type": "boolean"
+              },
+              "all": {
+                "default": false,
+                "description": "Include all items (varies by operation).",
+                "type": "boolean"
+              },
+              "force": {
+                "default": false,
+                "description": "Allow adding otherwise ignored files.",
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "stagedFiles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Files that were successfully staged."
+              },
+              "totalFiles": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Total number of files staged."
+              },
+              "status": {
+                "type": "object",
+                "properties": {
+                  "current_branch": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Current branch name after staging."
+                  },
+                  "staged_changes": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {},
+                    "description": "All staged changes after this operation."
+                  },
+                  "unstaged_changes": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {},
+                    "description": "Remaining unstaged changes."
+                  },
+                  "untracked_files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Remaining untracked files."
+                  },
+                  "conflicted_files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Files with conflicts."
+                  },
+                  "is_clean": {
+                    "type": "boolean",
+                    "description": "Whether working directory is clean (ready to commit)."
+                  }
+                },
+                "required": [
+                  "current_branch",
+                  "staged_changes",
+                  "unstaged_changes",
+                  "untracked_files",
+                  "conflicted_files",
+                  "is_clean"
+                ],
+                "additionalProperties": false,
+                "description": "Repository status after staging files."
+              }
+            },
+            "required": [
+              "success",
+              "stagedFiles",
+              "totalFiles",
+              "status"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_blame",
+          "title": "Git Blame",
+          "description": "Show line-by-line authorship information for a file, displaying who last modified each line and when. For large files, use startLine/endLine to limit output.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "filePath": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Path to the file to blame (relative to repository root). Must not start with \"-\"."
+              },
+              "startLine": {
+                "description": "Start line number (1-indexed).",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "endLine": {
+                "description": "End line number (1-indexed).",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "ignoreWhitespace": {
+                "default": false,
+                "description": "Ignore whitespace changes.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "filePath"
+            ],
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "filePath": {
+                "type": "string",
+                "description": "The file that was blamed."
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "lineNumber": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991,
+                      "description": "Line number in the file (1-indexed)."
+                    },
+                    "commitHash": {
+                      "type": "string",
+                      "description": "Full commit hash of the last change to this line."
+                    },
+                    "author": {
+                      "type": "string",
+                      "description": "Author who last modified this line."
+                    },
+                    "timestamp": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Unix timestamp of the commit that last modified this line."
+                    },
+                    "content": {
+                      "type": "string",
+                      "description": "The actual content/text of this line."
+                    }
+                  },
+                  "required": [
+                    "lineNumber",
+                    "commitHash",
+                    "author",
+                    "timestamp",
+                    "content"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Array of blame information for each line."
+              },
+              "totalLines": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Total number of lines in the output."
+              }
+            },
+            "required": [
+              "success",
+              "filePath",
+              "lines",
+              "totalLines"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "git_branch",
+          "title": "Git Branch",
+          "description": "Manage branches: list all branches, show current branch, create a new branch, delete a branch, or rename a branch.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "mode": {
+                "default": "list",
+                "description": "The branch operation to perform.",
+                "type": "string",
+                "enum": [
+                  "list",
+                  "create",
+                  "delete",
+                  "rename",
+                  "show-current"
+                ]
+              },
+              "branchName": {
+                "description": "Branch name for create/delete/rename operations.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "newBranchName": {
+                "description": "New branch name for rename operation.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "startPoint": {
+                "description": "Starting point (commit/branch) for new branch creation.",
+                "type": "string",
+                "minLength": 1
+              },
+              "force": {
+                "default": false,
+                "description": "Force the operation, bypassing safety checks.",
+                "type": "boolean"
+              },
+              "all": {
+                "default": false,
+                "description": "For list mode: show both local and remote branches.",
+                "type": "boolean"
+              },
+              "remote": {
+                "default": false,
+                "description": "For list mode: show only remote branches.",
+                "type": "boolean"
+              },
+              "merged": {
+                "description": "For list mode: show only branches merged into HEAD (true) or specified commit (string).",
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Commit reference: full/short hash, branch name, tag name, or relative ref (HEAD~1). Must not start with \"-\"."
+                  }
+                ]
+              },
+              "noMerged": {
+                "description": "For list mode: show only branches not merged into HEAD (true) or specified commit (string).",
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Commit reference: full/short hash, branch name, tag name, or relative ref (HEAD~1). Must not start with \"-\"."
+                  }
+                ]
+              },
+              "limit": {
+                "description": "For list mode: cap the number of branches returned (applied at the git command). Use on repos with many branches.",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "list",
+                  "create",
+                  "delete",
+                  "rename",
+                  "show-current"
+                ]
+              },
+              "branches": {
+                "description": "List of branches (for list mode).",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Branch name."
+                    },
+                    "current": {
+                      "type": "boolean",
+                      "description": "True if this is the current branch."
+                    },
+                    "commitHash": {
+                      "type": "string",
+                      "description": "Commit hash the branch points to."
+                    },
+                    "upstream": {
+                      "description": "Upstream branch name if configured.",
+                      "type": "string"
+                    },
+                    "ahead": {
+                      "description": "Commits ahead of upstream.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "behind": {
+                      "description": "Commits behind upstream.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "current",
+                    "commitHash"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "currentBranch": {
+                "description": "Name of current branch.",
+                "type": "string"
+              },
+              "message": {
+                "description": "Success message for create/delete/rename modes.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "success",
+              "mode"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_changelog_analyze",
+          "title": "Git Changelog Analyze",
+          "description": "Gather git history context (commits, tags) and structured review instructions to support LLM-driven changelog analysis. Changelog file should be read separately; this tool provides the supporting git data and analysis framework. Pass one or more review types to control what kind of analysis to perform.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "reviewTypes": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "security",
+                    "features",
+                    "storyline",
+                    "gaps",
+                    "breaking_changes",
+                    "quality"
+                  ]
+                },
+                "description": "Types of changelog review to perform. At least one required. Options: security, features, storyline, gaps, breaking_changes, quality."
+              },
+              "maxCommits": {
+                "default": 200,
+                "description": "Maximum recent commits to fetch for cross-referencing (1-1000).",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              },
+              "maxTags": {
+                "default": 100,
+                "description": "Maximum recent tags to fetch for release context (1-1000). Applied at the git command so large tag catalogs do not bloat the response.",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              },
+              "sinceTag": {
+                "description": "Only include git history since this tag (e.g., \"v1.2.0\"). Narrows the analysis window. Must not start with \"-\".",
+                "type": "string",
+                "minLength": 1
+              },
+              "branch": {
+                "description": "Branch to analyze (defaults to current branch).",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "reviewTypes"
+            ],
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "reviewTypes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "security",
+                    "features",
+                    "storyline",
+                    "gaps",
+                    "breaking_changes",
+                    "quality"
+                  ]
+                },
+                "description": "Review types that were requested."
+              },
+              "gitContext": {
+                "type": "object",
+                "properties": {
+                  "currentBranch": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Current branch name."
+                  },
+                  "totalCommitsFetched": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "Number of commits returned."
+                  },
+                  "commits": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "hash": {
+                          "type": "string",
+                          "description": "Short commit hash."
+                        },
+                        "subject": {
+                          "type": "string",
+                          "description": "Commit subject line."
+                        },
+                        "author": {
+                          "type": "string",
+                          "description": "Commit author."
+                        },
+                        "timestamp": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "Unix timestamp."
+                        },
+                        "refs": {
+                          "description": "Tags or branches at this commit.",
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "hash",
+                        "subject",
+                        "author",
+                        "timestamp"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "description": "Recent commits for cross-referencing."
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "description": "Tag name."
+                        },
+                        "commit": {
+                          "type": "string",
+                          "description": "Commit hash the tag points to."
+                        },
+                        "timestamp": {
+                          "description": "Tag creation timestamp.",
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "message": {
+                          "description": "Annotated tag message.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "commit"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "description": "Repository tags for release context."
+                  }
+                },
+                "required": [
+                  "currentBranch",
+                  "totalCommitsFetched",
+                  "commits",
+                  "tags"
+                ],
+                "additionalProperties": false,
+                "description": "Git history context for changelog cross-referencing."
+              },
+              "reviewInstructions": {
+                "type": "string",
+                "description": "Analysis instructions for each requested review type. Guides the LLM on what to look for in the changelog."
+              }
+            },
+            "required": [
+              "success",
+              "reviewTypes",
+              "gitContext",
+              "reviewInstructions"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "git_checkout",
+          "title": "Git Checkout",
+          "description": "Switch branches or restore working tree files. Can checkout an existing branch, create a new branch, or restore specific files.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "target": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255,
+                    "description": "Branch name (must follow git naming conventions, no leading \"-\")."
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Commit reference: full/short hash, branch name, tag name, or relative ref (HEAD~1). Must not start with \"-\"."
+                  }
+                ],
+                "description": "Branch name, commit hash, or tag to checkout."
+              },
+              "createBranch": {
+                "default": false,
+                "description": "Create a new branch with the specified name.",
+                "type": "boolean"
+              },
+              "force": {
+                "default": false,
+                "description": "Force the operation, bypassing safety checks.",
+                "type": "boolean"
+              },
+              "paths": {
+                "description": "Specific file paths to checkout/restore (relative to repository root). Entries must not start with \"-\".",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "File path (must not start with \"-\")."
+                }
+              },
+              "track": {
+                "description": "Set up tracking relationship with remote branch when creating new branch.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "target"
+            ],
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "target": {
+                "type": "string",
+                "description": "Checked out branch or commit."
+              },
+              "branchCreated": {
+                "type": "boolean",
+                "description": "True if a new branch was created."
+              },
+              "filesModified": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Files that were modified during checkout."
+              }
+            },
+            "required": [
+              "success",
+              "target",
+              "branchCreated",
+              "filesModified"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_cherry_pick",
+          "title": "Git Cherry-Pick",
+          "description": "Cherry-pick commits from other branches. Apply specific commits to the current branch without merging entire branches.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "commits": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Commit reference: full/short hash, branch name, tag name, or relative ref (HEAD~1). Must not start with \"-\"."
+                },
+                "description": "Commit hashes to cherry-pick."
+              },
+              "noCommit": {
+                "default": false,
+                "description": "Don't create commit (stage changes only).",
+                "type": "boolean"
+              },
+              "continueOperation": {
+                "default": false,
+                "description": "Continue cherry-pick after resolving conflicts.",
+                "type": "boolean"
+              },
+              "abort": {
+                "default": false,
+                "description": "Abort cherry-pick operation.",
+                "type": "boolean"
+              },
+              "mainline": {
+                "description": "For merge commits, specify which parent to follow (1 for first parent, 2 for second, etc.).",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "strategy": {
+                "description": "Merge strategy to use for cherry-pick.",
+                "type": "string",
+                "enum": [
+                  "ort",
+                  "recursive",
+                  "octopus",
+                  "ours",
+                  "subtree"
+                ]
+              },
+              "signoff": {
+                "default": false,
+                "description": "Add Signed-off-by line to the commit message.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "commits"
+            ],
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "pickedCommits": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Commits that were successfully cherry-picked."
+              },
+              "conflicts": {
+                "type": "boolean",
+                "description": "Whether operation had conflicts."
+              },
+              "conflictedFiles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Files with conflicts that need resolution."
+              },
+              "message": {
+                "description": "Human-readable next-step guidance, especially for conflicts.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "success",
+              "pickedCommits",
+              "conflicts",
+              "conflictedFiles"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_clean",
+          "title": "Git Clean",
+          "description": "Remove untracked files from the working directory. Requires force flag for safety. Use dry-run to preview files that would be removed.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "force": {
+                "default": false,
+                "description": "Force the operation, bypassing safety checks.",
+                "type": "boolean"
+              },
+              "dryRun": {
+                "default": false,
+                "description": "Preview the operation without executing it.",
+                "type": "boolean"
+              },
+              "directories": {
+                "default": false,
+                "description": "Remove untracked directories in addition to files.",
+                "type": "boolean"
+              },
+              "ignored": {
+                "default": false,
+                "description": "Remove ignored files as well.",
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "filesRemoved": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "List of files that were removed."
+              },
+              "directoriesRemoved": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "List of directories that were removed."
+              },
+              "dryRun": {
+                "type": "boolean",
+                "description": "Whether this was a dry-run (preview only)."
+              }
+            },
+            "required": [
+              "success",
+              "filesRemoved",
+              "directoriesRemoved",
+              "dryRun"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_clear_working_dir",
+          "title": "Git Clear Working Directory",
+          "description": "Clear the session working directory setting. This resets the context without restarting the server. Subsequent git operations will require an explicit path parameter unless git_set_working_dir is called again.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "confirm": {
+                "type": "string",
+                "enum": [
+                  "Y",
+                  "y",
+                  "Yes",
+                  "yes"
+                ],
+                "description": "Explicit confirmation required to clear working directory. Accepted values: 'Y', 'y', 'Yes', or 'yes'."
+              }
+            },
+            "required": [
+              "confirm"
+            ],
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "message": {
+                "type": "string",
+                "description": "Confirmation message."
+              },
+              "previousPath": {
+                "description": "The working directory that was cleared (if one was set).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "success",
+              "message"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_clone",
+          "title": "Git Clone",
+          "description": "Clone a repository from a remote URL or local path. Accepts HTTP(S), SSH, git://, file://, and bare filesystem paths, with optional shallow cloning.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048,
+                "description": "Git repository URL: HTTP(S), SSH (ssh://… or user@host:path), git://, file://, or an absolute filesystem path. Must not start with \"-\" and no segment may start with \"-\"."
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Destination path where the repository should be cloned. Must not start with \"-\"."
+              },
+              "branch": {
+                "description": "Specific branch to clone (defaults to remote HEAD). Must not start with \"-\".",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "depth": {
+                "description": "Create a shallow clone with history truncated to N commits.",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "bare": {
+                "default": false,
+                "description": "Create a bare repository (no working directory).",
+                "type": "boolean"
+              },
+              "mirror": {
+                "default": false,
+                "description": "Create a mirror clone (implies bare).",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "url",
+              "path"
+            ],
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "remoteUrl": {
+                "type": "string",
+                "description": "The remote URL or path that was cloned."
+              },
+              "path": {
+                "type": "string",
+                "description": "Local path where repository was cloned."
+              },
+              "branch": {
+                "type": "string",
+                "description": "The branch that was checked out."
+              },
+              "commitHash": {
+                "description": "Current HEAD commit hash.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "success",
+              "remoteUrl",
+              "path",
+              "branch"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_commit",
+          "title": "Git Commit",
+          "description": "Create a new commit with staged changes in the repository. Records a snapshot of the staging area with a commit message.\n\n**Commit Message Format:**\nPass commit messages as JSON string parameters. Multi-line messages are supported using standard JSON string escaping.\n\n**Examples:**\n- Single line: { \"message\": \"feat: add user authentication\" }\n- Multi-line: { \"message\": \"feat: add user authentication\\n\\nImplemented OAuth2 flow with JWT tokens.\\nAdded tests for login and logout.\" }\n\nNote: Do not use bash heredoc syntax. Literal escape sequences (\\n, \\t) in the message string are automatically normalized to their actual characters.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "message": {
+                "description": "Commit message.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 10000
+              },
+              "author": {
+                "description": "Override commit author (defaults to git config).",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Author's name"
+                  },
+                  "email": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Author's email address (e.g. user@example.com)."
+                  }
+                },
+                "required": [
+                  "name",
+                  "email"
+                ]
+              },
+              "amend": {
+                "default": false,
+                "description": "Amend the previous commit instead of creating a new one. Use with caution.",
+                "type": "boolean"
+              },
+              "allowEmpty": {
+                "default": false,
+                "description": "Allow creating a commit with no changes.",
+                "type": "boolean"
+              },
+              "noVerify": {
+                "default": false,
+                "description": "Bypass pre-commit and commit-msg hooks.",
+                "type": "boolean"
+              },
+              "filesToStage": {
+                "description": "File paths to stage before committing (atomic stage+commit operation). Entries must not start with \"-\".",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "File path (must not start with \"-\")."
+                }
+              }
+            },
+            "required": [
+              "message"
+            ],
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "commitHash": {
+                "type": "string",
+                "description": "SHA-1 hash of the created commit."
+              },
+              "message": {
+                "type": "string",
+                "description": "The commit message."
+              },
+              "author": {
+                "type": "string",
+                "description": "Author of the commit."
+              },
+              "timestamp": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Unix timestamp when the commit was created."
+              },
+              "filesChanged": {
+                "description": "Number of files changed in this commit.",
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "committedFiles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "List of files that were committed."
+              },
+              "insertions": {
+                "description": "Number of line insertions.",
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "deletions": {
+                "description": "Number of line deletions.",
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "signed": {
+                "type": "boolean",
+                "description": "Whether the commit was signed. False when GIT_SIGN_COMMITS=false or when signing was attempted and fell back to unsigned on failure."
+              },
+              "signingWarning": {
+                "description": "Populated only when signing was requested but failed, and the commit was created unsigned as a fallback.",
+                "type": "string"
+              },
+              "status": {
+                "type": "object",
+                "properties": {
+                  "current_branch": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Current branch name after commit."
+                  },
+                  "staged_changes": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {},
+                    "description": "Remaining staged changes after commit."
+                  },
+                  "unstaged_changes": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {},
+                    "description": "Unstaged changes after commit."
+                  },
+                  "untracked_files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Untracked files after commit."
+                  },
+                  "conflicted_files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Conflicted files after commit."
+                  },
+                  "is_clean": {
+                    "type": "boolean",
+                    "description": "Whether working directory is clean."
+                  }
+                },
+                "required": [
+                  "current_branch",
+                  "staged_changes",
+                  "unstaged_changes",
+                  "untracked_files",
+                  "conflicted_files",
+                  "is_clean"
+                ],
+                "additionalProperties": false,
+                "description": "Repository status after the commit."
+              }
+            },
+            "required": [
+              "success",
+              "commitHash",
+              "message",
+              "author",
+              "timestamp",
+              "committedFiles",
+              "signed",
+              "status"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_diff",
+          "title": "Git Diff",
+          "description": "View differences between commits, branches, or working tree. Shows changes in unified diff format.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "target": {
+                "description": "Target commit/branch to compare against. If not specified, shows unstaged changes in working tree.",
+                "type": "string",
+                "minLength": 1
+              },
+              "source": {
+                "description": "Source commit/branch to compare from. If target is specified but not source, compares target against working tree.",
+                "type": "string",
+                "minLength": 1
+              },
+              "paths": {
+                "description": "Limit diff to specific file paths (relative to repository root). Entries must not start with \"-\".",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "File path (must not start with \"-\")."
+                }
+              },
+              "staged": {
+                "default": false,
+                "description": "Show diff of staged changes instead of unstaged.",
+                "type": "boolean"
+              },
+              "includeUntracked": {
+                "default": false,
+                "description": "Include untracked files in the diff. Useful for reviewing all upcoming changes.",
+                "type": "boolean"
+              },
+              "nameOnly": {
+                "default": false,
+                "description": "Show only names of changed files, not the diff content.",
+                "type": "boolean"
+              },
+              "stat": {
+                "default": false,
+                "description": "Show diffstat (summary of changes) instead of full diff content.",
+                "type": "boolean"
+              },
+              "contextLines": {
+                "default": 3,
+                "description": "Number of context lines to show around changes.",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "autoExclude": {
+                "default": true,
+                "description": "Automatically exclude lock files and other generated files (e.g., package-lock.json, yarn.lock, bun.lock, poetry.lock, go.sum) from diff output to reduce context bloat. Set to false if you need to inspect these files.",
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "diff": {
+                "type": "string",
+                "description": "The diff output in unified diff format."
+              },
+              "filesChanged": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Number of files with differences."
+              },
+              "insertions": {
+                "description": "Total number of line insertions.",
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "deletions": {
+                "description": "Total number of line deletions.",
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "excludedFiles": {
+                "description": "Files that were automatically excluded from the diff (e.g., lock files). Call again with autoExclude=false to include them.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "success",
+              "diff",
+              "filesChanged"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "git_fetch",
+          "title": "Git Fetch",
+          "description": "Fetch updates from a remote repository. Downloads objects and refs without merging them.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "remote": {
+                "description": "Remote name (default: origin).",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "pattern": "^[a-zA-Z0-9._]+(?:[-._a-zA-Z0-9]*)$"
+              },
+              "prune": {
+                "default": false,
+                "description": "Prune remote-tracking references that no longer exist on remote.",
+                "type": "boolean"
+              },
+              "tags": {
+                "default": false,
+                "description": "Fetch all tags from the remote.",
+                "type": "boolean"
+              },
+              "depth": {
+                "description": "Create a shallow clone with history truncated to N commits.",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "remote": {
+                "type": "string",
+                "description": "Remote name that was fetched from."
+              },
+              "fetchedRefs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "References that were fetched from the remote."
+              },
+              "prunedRefs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "References that were pruned (deleted locally)."
+              }
+            },
+            "required": [
+              "success",
+              "remote",
+              "fetchedRefs",
+              "prunedRefs"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_init",
+          "title": "Git Init",
+          "description": "Initialize a new Git repository at the specified path. Creates a .git directory and sets up the initial branch.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "initialBranch": {
+                "description": "Name of the initial branch (default: main).",
+                "type": "string"
+              },
+              "bare": {
+                "default": false,
+                "description": "Create a bare repository (no working directory).",
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "path": {
+                "type": "string",
+                "description": "Path where repository was initialized."
+              },
+              "initialBranch": {
+                "type": "string",
+                "description": "Name of the initial branch."
+              },
+              "isBare": {
+                "type": "boolean",
+                "description": "Whether this is a bare repository."
+              }
+            },
+            "required": [
+              "success",
+              "path",
+              "initialBranch",
+              "isBare"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_log",
+          "title": "Git Log",
+          "description": "View commit history with optional filtering by author, date range, file path, or commit message pattern.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "maxCount": {
+                "default": 10,
+                "description": "Maximum number of items to return (1-1000).",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              },
+              "skip": {
+                "description": "Number of items to skip for pagination.",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "since": {
+                "description": "Show commits more recent than a specific date (ISO 8601 format).",
+                "type": "string"
+              },
+              "until": {
+                "description": "Show commits older than a specific date (ISO 8601 format).",
+                "type": "string"
+              },
+              "author": {
+                "description": "Filter commits by author name or email pattern.",
+                "type": "string"
+              },
+              "grep": {
+                "description": "Filter commits by message pattern (regex supported).",
+                "type": "string"
+              },
+              "branch": {
+                "description": "Show commits from a specific branch or ref (defaults to current branch).",
+                "type": "string",
+                "minLength": 1
+              },
+              "filePath": {
+                "description": "Show commits that affected a specific file path. Must not start with \"-\".",
+                "type": "string",
+                "minLength": 1
+              },
+              "oneline": {
+                "default": false,
+                "description": "Abbreviated output: return only hash, shortHash, and subject per commit. Significantly reduces response size.",
+                "type": "boolean"
+              },
+              "stat": {
+                "default": false,
+                "description": "Include file change statistics for each commit.",
+                "type": "boolean"
+              },
+              "patch": {
+                "default": false,
+                "description": "Include the full diff patch for each commit.",
+                "type": "boolean"
+              },
+              "showSignature": {
+                "default": false,
+                "description": "Show GPG signature verification information for each commit.",
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "commits": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "hash": {
+                      "type": "string",
+                      "description": "Full commit SHA-1 hash."
+                    },
+                    "shortHash": {
+                      "type": "string",
+                      "description": "Abbreviated commit hash (7 characters)."
+                    },
+                    "author": {
+                      "description": "Commit author name.",
+                      "type": "string"
+                    },
+                    "authorEmail": {
+                      "description": "Commit author email.",
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "description": "Commit timestamp (Unix timestamp).",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "subject": {
+                      "type": "string",
+                      "description": "First line of the commit message."
+                    },
+                    "body": {
+                      "description": "Commit message body (if present).",
+                      "type": "string"
+                    },
+                    "parents": {
+                      "description": "Parent commit hashes.",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "refs": {
+                      "description": "References (branches, tags) pointing to this commit.",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "stat": {
+                      "description": "File change statistics (when stat option is used).",
+                      "type": "string"
+                    },
+                    "patch": {
+                      "description": "Full diff patch (when patch option is used).",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "hash",
+                    "shortHash",
+                    "subject"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Array of commit objects."
+              },
+              "totalCount": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Total number of commits returned (may be limited by maxCount)."
+              },
+              "note": {
+                "description": "Set when filters returned zero commits. Echoes the criteria and suggests broadening so callers can self-correct without inspecting the request.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "success",
+              "commits",
+              "totalCount"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "git_merge",
+          "title": "Git Merge",
+          "description": "Merge branches together. Integrates changes from another branch into the current branch with optional merge strategies.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "branch": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "description": "Branch to merge into current branch."
+              },
+              "strategy": {
+                "description": "Merge strategy to use (ort, recursive, octopus, ours, subtree).",
+                "type": "string",
+                "enum": [
+                  "ort",
+                  "recursive",
+                  "octopus",
+                  "ours",
+                  "subtree"
+                ]
+              },
+              "noFastForward": {
+                "default": false,
+                "description": "Prevent fast-forward merge (create merge commit).",
+                "type": "boolean"
+              },
+              "squash": {
+                "default": false,
+                "description": "Squash all commits from the branch into a single commit.",
+                "type": "boolean"
+              },
+              "message": {
+                "description": "Custom merge commit message.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 10000
+              },
+              "abort": {
+                "default": false,
+                "description": "Abort an in-progress merge that has conflicts.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "branch"
+            ],
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "strategy": {
+                "type": "string",
+                "description": "Merge strategy used."
+              },
+              "fastForward": {
+                "type": "boolean",
+                "description": "Whether merge was fast-forward."
+              },
+              "conflicts": {
+                "type": "boolean",
+                "description": "Whether merge had conflicts."
+              },
+              "conflictedFiles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Files with conflicts that need resolution."
+              },
+              "mergedFiles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Files that were merged."
+              },
+              "message": {
+                "type": "string",
+                "description": "Merge commit message."
+              }
+            },
+            "required": [
+              "success",
+              "strategy",
+              "fastForward",
+              "conflicts",
+              "conflictedFiles",
+              "mergedFiles",
+              "message"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_pull",
+          "title": "Git Pull",
+          "description": "Pull changes from a remote repository. Fetches and integrates changes into the current branch.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "remote": {
+                "description": "Remote name (default: origin).",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "pattern": "^[a-zA-Z0-9._]+(?:[-._a-zA-Z0-9]*)$"
+              },
+              "branch": {
+                "description": "Branch name (default: current branch).",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "rebase": {
+                "default": false,
+                "description": "Use rebase instead of merge when integrating changes.",
+                "type": "boolean"
+              },
+              "fastForwardOnly": {
+                "default": false,
+                "description": "Fail if can't fast-forward (no merge commit).",
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "remote": {
+                "type": "string",
+                "description": "Remote name that was pulled from."
+              },
+              "branch": {
+                "type": "string",
+                "description": "Branch that was pulled."
+              },
+              "strategy": {
+                "type": "string",
+                "enum": [
+                  "merge",
+                  "rebase",
+                  "fast-forward"
+                ],
+                "description": "Integration strategy used."
+              },
+              "conflicts": {
+                "type": "boolean",
+                "description": "Whether pull had conflicts."
+              },
+              "conflictedFiles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Files with conflicts that need resolution (empty if conflicts is false)."
+              },
+              "filesChanged": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Files that were changed."
+              }
+            },
+            "required": [
+              "success",
+              "remote",
+              "branch",
+              "strategy",
+              "conflicts",
+              "conflictedFiles",
+              "filesChanged"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_push",
+          "title": "Git Push",
+          "description": "Push changes to a remote repository. Uploads local commits to the remote branch.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "remote": {
+                "description": "Remote name (default: origin).",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "pattern": "^[a-zA-Z0-9._]+(?:[-._a-zA-Z0-9]*)$"
+              },
+              "branch": {
+                "description": "Branch name (default: current branch).",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "force": {
+                "default": false,
+                "description": "Force push (overwrites remote history).",
+                "type": "boolean"
+              },
+              "forceWithLease": {
+                "default": false,
+                "description": "Safer force push - only succeeds if remote branch is at expected state.",
+                "type": "boolean"
+              },
+              "setUpstream": {
+                "default": false,
+                "description": "Set upstream tracking relationship for the branch.",
+                "type": "boolean"
+              },
+              "tags": {
+                "default": false,
+                "description": "Push all tags to the remote.",
+                "type": "boolean"
+              },
+              "dryRun": {
+                "default": false,
+                "description": "Preview the operation without executing it.",
+                "type": "boolean"
+              },
+              "delete": {
+                "default": false,
+                "description": "Delete the specified remote branch.",
+                "type": "boolean"
+              },
+              "remoteBranch": {
+                "description": "Remote branch name to push to (if different from local branch name).",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "confirmed": {
+                "default": false,
+                "description": "Explicit confirmation required for force push or branch deletion on protected branches (main, master, production, etc.).",
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "remote": {
+                "type": "string",
+                "description": "Remote name that was pushed to."
+              },
+              "branch": {
+                "type": "string",
+                "description": "Branch that was pushed."
+              },
+              "upstreamSet": {
+                "type": "boolean",
+                "description": "Whether upstream tracking was set for the branch."
+              },
+              "pushedRefs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "References that were successfully pushed."
+              },
+              "rejectedRefs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "References that were rejected by the remote."
+              }
+            },
+            "required": [
+              "success",
+              "remote",
+              "branch",
+              "upstreamSet",
+              "pushedRefs",
+              "rejectedRefs"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_rebase",
+          "title": "Git Rebase",
+          "description": "Rebase commits onto another branch. Reapplies commits on top of another base tip for a cleaner history.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "mode": {
+                "default": "start",
+                "description": "Rebase operation mode: 'start', 'continue', 'abort', or 'skip'.",
+                "type": "string",
+                "enum": [
+                  "start",
+                  "continue",
+                  "abort",
+                  "skip"
+                ]
+              },
+              "upstream": {
+                "description": "Upstream branch to rebase onto (required for start mode).",
+                "type": "string",
+                "minLength": 1
+              },
+              "branch": {
+                "description": "Branch to rebase (default: current branch).",
+                "type": "string",
+                "minLength": 1
+              },
+              "interactive": {
+                "default": false,
+                "description": "Interactive rebase (not supported in all providers).",
+                "type": "boolean"
+              },
+              "onto": {
+                "description": "Rebase onto different commit than upstream.",
+                "type": "string",
+                "minLength": 1
+              },
+              "preserve": {
+                "default": false,
+                "description": "Preserve merge commits during rebase.",
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "conflicts": {
+                "type": "boolean",
+                "description": "Whether rebase had conflicts."
+              },
+              "conflictedFiles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Files with conflicts that need resolution."
+              },
+              "rebasedCommits": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Number of commits that were rebased."
+              },
+              "currentCommit": {
+                "description": "Current commit hash if rebase stopped due to conflict.",
+                "type": "string"
+              },
+              "message": {
+                "description": "Human-readable next-step guidance, especially for conflicts.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "success",
+              "conflicts",
+              "conflictedFiles",
+              "rebasedCommits"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_reflog",
+          "title": "Git Reflog",
+          "description": "View the reference logs (reflog) to track when branch tips and other references were updated. Useful for recovering lost commits.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "ref": {
+                "default": "HEAD",
+                "description": "Reference whose reflog to show. Defaults to HEAD. Must not start with \"-\".",
+                "type": "string",
+                "minLength": 1
+              },
+              "maxCount": {
+                "default": 25,
+                "description": "Maximum number of items to return (1-1000).",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "ref": {
+                "type": "string",
+                "description": "The reference that was queried."
+              },
+              "entries": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "hash": {
+                      "type": "string",
+                      "description": "Commit hash for this reflog entry."
+                    },
+                    "refName": {
+                      "type": "string",
+                      "description": "Reference name (e.g., HEAD@{0}, main@{1})."
+                    },
+                    "action": {
+                      "type": "string",
+                      "description": "Action that caused this reflog entry (commit, checkout, etc.)."
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Detailed message describing the action."
+                    },
+                    "timestamp": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Unix timestamp when this action occurred."
+                    }
+                  },
+                  "required": [
+                    "hash",
+                    "refName",
+                    "action",
+                    "message",
+                    "timestamp"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Array of reflog entries in reverse chronological order."
+              },
+              "totalEntries": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Total number of reflog entries."
+              }
+            },
+            "required": [
+              "success",
+              "ref",
+              "entries",
+              "totalEntries"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "git_remote",
+          "title": "Git Remote",
+          "description": "Manage remote repositories: list remotes, add new remotes, remove remotes, rename remotes, or get/set remote URLs.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "mode": {
+                "default": "list",
+                "description": "The remote operation to perform.",
+                "type": "string",
+                "enum": [
+                  "list",
+                  "add",
+                  "remove",
+                  "rename",
+                  "get-url",
+                  "set-url"
+                ]
+              },
+              "name": {
+                "description": "Remote name for add/remove/rename/get-url/set-url operations.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "pattern": "^[a-zA-Z0-9._]+(?:[-._a-zA-Z0-9]*)$"
+              },
+              "url": {
+                "description": "Remote URL for add/set-url operations. Accepts HTTP(S), SSH (ssh://… or user@host:path), git://, or file:// URLs. Must not start with \"-\".",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              },
+              "newName": {
+                "description": "New remote name for rename operation.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "pattern": "^[a-zA-Z0-9._]+(?:[-._a-zA-Z0-9]*)$"
+              },
+              "push": {
+                "default": false,
+                "description": "Set push URL separately (for set-url operation).",
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "mode": {
+                "type": "string",
+                "description": "Operation mode that was performed."
+              },
+              "remotes": {
+                "description": "List of remotes (for list mode).",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Remote name."
+                    },
+                    "fetchUrl": {
+                      "type": "string",
+                      "description": "Fetch URL."
+                    },
+                    "pushUrl": {
+                      "type": "string",
+                      "description": "Push URL (may differ from fetch URL)."
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "fetchUrl",
+                    "pushUrl"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "url": {
+                "description": "Remote URL (for get-url mode).",
+                "type": "string"
+              },
+              "added": {
+                "description": "Added remote (for add mode).",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "url"
+                ],
+                "additionalProperties": false
+              },
+              "removed": {
+                "description": "Removed remote name (for remove mode).",
+                "type": "string"
+              },
+              "renamed": {
+                "description": "Rename information (for rename mode).",
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "from",
+                  "to"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "success",
+              "mode"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_reset",
+          "title": "Git Reset",
+          "description": "Reset current HEAD to specified state. Can be used to unstage files (soft), discard commits (mixed), or discard all changes (hard).",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "mode": {
+                "default": "mixed",
+                "description": "Reset mode: soft (keep changes staged), mixed (unstage changes), hard (discard all changes), merge (reset and merge), keep (reset but keep local changes).",
+                "type": "string",
+                "enum": [
+                  "soft",
+                  "mixed",
+                  "hard",
+                  "merge",
+                  "keep"
+                ]
+              },
+              "target": {
+                "default": "HEAD",
+                "description": "Target commit to reset to. Defaults to HEAD.",
+                "type": "string",
+                "minLength": 1
+              },
+              "paths": {
+                "description": "Specific file paths to reset (leaves HEAD unchanged). Entries must not start with \"-\".",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "File path (must not start with \"-\")."
+                }
+              },
+              "confirmed": {
+                "default": false,
+                "description": "Explicit confirmation required for hard, merge, and keep reset modes on protected branches (main, master, production, etc.).",
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "mode": {
+                "type": "string",
+                "description": "Reset mode that was used."
+              },
+              "target": {
+                "type": "string",
+                "description": "Commit hash HEAD points to after the reset."
+              },
+              "previousCommit": {
+                "description": "Commit hash HEAD pointed to before the reset (omitted if HEAD did not move).",
+                "type": "string"
+              },
+              "filesReset": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Files affected by the reset. For path-only resets, the listed paths. For commit-move resets, files that differ between the old and new HEAD. For --hard with no HEAD move, files whose pending working-tree changes were discarded."
+              }
+            },
+            "required": [
+              "success",
+              "mode",
+              "target",
+              "filesReset"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_set_working_dir",
+          "title": "Git Set Working Directory",
+          "description": "Set the session working directory for all git operations so subsequent calls can omit the path parameter. Always returns a repository snapshot (status, recent commits, recent tags, remotes) to orient the caller.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Absolute path to the git repository to use as the working directory."
+              },
+              "validateGitRepo": {
+                "default": true,
+                "description": "Validate that the path is a Git repository.",
+                "type": "boolean"
+              },
+              "initializeIfNotPresent": {
+                "default": false,
+                "description": "If not a Git repository, initialize it with 'git init'.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "path": {
+                "type": "string",
+                "description": "The working directory that was set."
+              },
+              "message": {
+                "type": "string",
+                "description": "Confirmation message."
+              },
+              "repository": {
+                "description": "Best-effort repository snapshot. Omitted when the path is not a git repository (see enrichmentWarnings).",
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "object",
+                    "properties": {
+                      "branch": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Current branch (null on detached HEAD)."
+                      },
+                      "isClean": {
+                        "type": "boolean",
+                        "description": "True when the working tree has no changes."
+                      },
+                      "staged": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Paths staged for the next commit."
+                      },
+                      "unstaged": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Paths with unstaged modifications."
+                      },
+                      "untracked": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Untracked paths."
+                      },
+                      "conflicts": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Paths with merge conflicts."
+                      },
+                      "upstream": {
+                        "description": "Upstream ref being tracked by the current branch.",
+                        "type": "string"
+                      },
+                      "ahead": {
+                        "description": "Commits ahead of upstream (if tracking).",
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "behind": {
+                        "description": "Commits behind upstream (if tracking).",
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "branch",
+                      "isClean",
+                      "staged",
+                      "unstaged",
+                      "untracked",
+                      "conflicts"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "recentCommits": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "hash": {
+                          "type": "string",
+                          "description": "Short commit hash."
+                        },
+                        "author": {
+                          "type": "string",
+                          "description": "Author name."
+                        },
+                        "date": {
+                          "type": "string",
+                          "description": "Author date (ISO 8601)."
+                        },
+                        "subject": {
+                          "type": "string",
+                          "description": "First line of the commit message."
+                        }
+                      },
+                      "required": [
+                        "hash",
+                        "author",
+                        "date",
+                        "subject"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "description": "Up to 2 most recent commits on the current branch."
+                  },
+                  "recentTags": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "description": "Tag name."
+                        },
+                        "date": {
+                          "description": "Creator date (ISO 8601); absent for lightweight tags with no metadata.",
+                          "type": "string"
+                        },
+                        "tagger": {
+                          "description": "Tagger identity (annotated tags only).",
+                          "type": "string"
+                        },
+                        "annotationSubject": {
+                          "description": "First line of the tag annotation (annotated tags only).",
+                          "type": "string"
+                        },
+                        "annotationBody": {
+                          "description": "Remaining annotation body after the subject (annotated tags only).",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "description": "Up to 2 most recent tags by creator date."
+                  },
+                  "remotes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "description": "Remote name."
+                        },
+                        "fetchUrl": {
+                          "type": "string",
+                          "description": "Fetch URL."
+                        },
+                        "pushUrl": {
+                          "type": "string",
+                          "description": "Push URL (may differ from fetch URL)."
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "fetchUrl",
+                        "pushUrl"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "description": "Configured remote repositories."
+                  }
+                },
+                "required": [
+                  "status",
+                  "recentCommits",
+                  "recentTags",
+                  "remotes"
+                ],
+                "additionalProperties": false
+              },
+              "enrichmentWarnings": {
+                "description": "Actionable notes when snapshot gathering was skipped or partially failed.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "success",
+              "path",
+              "message"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_show",
+          "title": "Git Show",
+          "description": "Show details of a git object (commit, tree, blob, or tag). Displays commit information and the diff of changes introduced.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "object": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Git object to show (commit hash, branch, tag, tree, or blob)."
+              },
+              "format": {
+                "description": "Output format for the git object. Use \"raw\" for unprocessed git output.",
+                "type": "string",
+                "enum": [
+                  "raw"
+                ]
+              },
+              "stat": {
+                "default": false,
+                "description": "Show diffstat instead of full diff.",
+                "type": "boolean"
+              },
+              "filePath": {
+                "description": "View specific file at a given commit reference. When provided, shows the file content from the specified object. Must not start with \"-\".",
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "object"
+            ],
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "object": {
+                "type": "string",
+                "description": "Object identifier."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "commit",
+                  "tag",
+                  "tree",
+                  "blob"
+                ],
+                "description": "Type of git object shown."
+              },
+              "content": {
+                "type": "string",
+                "description": "Formatted output showing the object details."
+              },
+              "metadata": {
+                "description": "Additional metadata about the object.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "success",
+              "object",
+              "type",
+              "content"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "git_stash",
+          "title": "Git Stash",
+          "description": "Manage stashes: list stashes, save current changes (push), restore changes (pop/apply), or remove stashes (drop/clear).",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "mode": {
+                "default": "push",
+                "description": "The stash operation to perform. Defaults to push (save current changes).",
+                "type": "string",
+                "enum": [
+                  "list",
+                  "push",
+                  "pop",
+                  "apply",
+                  "drop",
+                  "clear"
+                ]
+              },
+              "message": {
+                "description": "Stash message description (for push operation).",
+                "type": "string"
+              },
+              "stashRef": {
+                "description": "Stash reference like stash@{0} (for pop/apply/drop operations). Must not start with \"-\".",
+                "type": "string",
+                "minLength": 1
+              },
+              "includeUntracked": {
+                "default": false,
+                "description": "Include untracked files in the stash (for push operation).",
+                "type": "boolean"
+              },
+              "keepIndex": {
+                "default": false,
+                "description": "Don't revert staged changes (for push operation).",
+                "type": "boolean"
+              },
+              "limit": {
+                "description": "For list mode: cap the number of stash entries returned (applied at the git command).",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "mode": {
+                "type": "string",
+                "description": "Operation mode that was performed."
+              },
+              "stashes": {
+                "description": "List of stashes (for list mode).",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "ref": {
+                      "type": "string",
+                      "description": "Stash reference (e.g., stash@{0})."
+                    },
+                    "index": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Stash index number."
+                    },
+                    "branch": {
+                      "type": "string",
+                      "description": "Branch name when stashed."
+                    },
+                    "description": {
+                      "type": "string",
+                      "description": "Stash description."
+                    },
+                    "timestamp": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Unix timestamp when stashed."
+                    }
+                  },
+                  "required": [
+                    "ref",
+                    "index",
+                    "branch",
+                    "description",
+                    "timestamp"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "created": {
+                "description": "Created stash reference (for push mode).",
+                "type": "string"
+              },
+              "applied": {
+                "description": "Applied stash reference (for pop/apply mode).",
+                "type": "string"
+              },
+              "dropped": {
+                "description": "Dropped stash reference (for drop mode).",
+                "type": "string"
+              },
+              "conflicts": {
+                "description": "Whether operation had conflicts.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "success",
+              "mode"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_status",
+          "title": "Git Status",
+          "description": "Show the working tree status including staged, unstaged, and untracked files.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "includeUntracked": {
+                "default": true,
+                "description": "Include untracked files in the output.",
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "currentBranch": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Current branch name."
+              },
+              "upstream": {
+                "description": "Upstream ref the current branch is tracking (if any).",
+                "type": "string"
+              },
+              "ahead": {
+                "description": "Commits ahead of upstream (if tracking).",
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "behind": {
+                "description": "Commits behind upstream (if tracking).",
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "isClean": {
+                "type": "boolean",
+                "description": "True if working directory is clean (no staged, unstaged, or untracked changes). When includeUntracked is false, untracked files are excluded from this check."
+              },
+              "stagedChanges": {
+                "type": "object",
+                "properties": {
+                  "added": {
+                    "description": "Files added to the index (staged).",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "modified": {
+                    "description": "Files modified and staged.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "deleted": {
+                    "description": "Files deleted and staged.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "renamed": {
+                    "description": "Files renamed and staged.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "copied": {
+                    "description": "Files copied and staged.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Changes that have been staged for the next commit."
+              },
+              "unstagedChanges": {
+                "type": "object",
+                "properties": {
+                  "added": {
+                    "description": "Files added but not staged.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "modified": {
+                    "description": "Files modified but not staged.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "deleted": {
+                    "description": "Files deleted but not staged.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Changes in the working directory that have not been staged."
+              },
+              "untrackedFiles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Files in the working directory not tracked by git."
+              },
+              "conflictedFiles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Files with merge conflicts that need resolution."
+              }
+            },
+            "required": [
+              "success",
+              "currentBranch",
+              "isClean",
+              "stagedChanges",
+              "unstagedChanges",
+              "untrackedFiles",
+              "conflictedFiles"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        },
+        {
+          "name": "git_tag",
+          "title": "Git Tag",
+          "description": "Manage tags: list all tags, create a new tag, delete a tag, or verify a signed tag. Tags are used to mark specific points in history (releases, milestones). Verify runs `git tag -v` and returns a structured result distinguishing unsigned tags, missing trust configuration, bad signatures, and valid signatures.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "mode": {
+                "default": "list",
+                "description": "The tag operation to perform.",
+                "type": "string",
+                "enum": [
+                  "list",
+                  "create",
+                  "delete",
+                  "verify"
+                ]
+              },
+              "tagName": {
+                "description": "Tag name for create/delete/verify operations.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "commit": {
+                "description": "Commit to tag (default: HEAD for create operation).",
+                "type": "string",
+                "minLength": 1
+              },
+              "message": {
+                "description": "Tag message. Providing a message always produces an annotated tag (git does not support messages on lightweight tags). For release tags, summarize notable changes.",
+                "type": "string"
+              },
+              "annotated": {
+                "default": false,
+                "description": "Create an annotated tag with a default \"Tag <name>\" message. Only effective when no message is provided and signing is disabled — otherwise the tag is always annotated.",
+                "type": "boolean"
+              },
+              "force": {
+                "default": false,
+                "description": "Overwrite an existing tag (create mode only; has no effect on list or delete).",
+                "type": "boolean"
+              },
+              "limit": {
+                "description": "For list mode: cap the number of tags returned (applied at the git command via `--count=N`). Use on repos with many tags.",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "mode": {
+                "type": "string",
+                "description": "Operation mode that was performed."
+              },
+              "tags": {
+                "description": "List of tags (for list mode).",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Tag name."
+                    },
+                    "commit": {
+                      "type": "string",
+                      "description": "Commit hash the tag points to."
+                    },
+                    "message": {
+                      "description": "First line of the tag annotation (annotated tags only). See `annotationBody` for the remainder.",
+                      "type": "string"
+                    },
+                    "annotationBody": {
+                      "description": "Remaining annotation body after the subject line (annotated tags only).",
+                      "type": "string"
+                    },
+                    "tagger": {
+                      "description": "Tagger name and email.",
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "description": "Tag creation timestamp.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "commit"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "created": {
+                "description": "Created tag name (for create mode).",
+                "type": "string"
+              },
+              "deleted": {
+                "description": "Deleted tag name (for delete mode).",
+                "type": "string"
+              },
+              "signed": {
+                "description": "Whether the created tag was signed. Only populated for create mode. False when GIT_SIGN_COMMITS=false or when signing failed and fell back to unsigned.",
+                "type": "boolean"
+              },
+              "signingWarning": {
+                "description": "Populated only when signing was requested but failed, and the tag was created unsigned as a fallback.",
+                "type": "string"
+              },
+              "verifiedTag": {
+                "description": "Verified tag name (for verify mode). Echoes the input so callers can correlate results in batched flows.",
+                "type": "string"
+              },
+              "verified": {
+                "description": "Whether the signature validated (for verify mode). `false` for unsigned tags, missing trust config, bad signatures, or unparseable output — inspect `warning` to distinguish.",
+                "type": "boolean"
+              },
+              "signatureType": {
+                "description": "Signature algorithm family when detectable from `git tag -v` output (verify mode). Absent for unsigned tags or unparseable output.",
+                "type": "string",
+                "enum": [
+                  "gpg",
+                  "ssh",
+                  "x509"
+                ]
+              },
+              "signerIdentity": {
+                "description": "Signer identity as emitted by git — e.g., `Name <email>` for GPG or the SSH principal. Verify mode only.",
+                "type": "string"
+              },
+              "signerKey": {
+                "description": "Key material emitted by git — GPG fingerprint/key ID or SSH key fingerprint (`SHA256:…`). Verify mode only; absent when git did not surface it.",
+                "type": "string"
+              },
+              "warning": {
+                "description": "Populated on verify failure with a human-readable reason distinguishing unsigned tags, missing trust configuration, bad signatures, and unparseable output.",
+                "type": "string"
+              },
+              "rawOutput": {
+                "description": "Raw stderr from `git tag -v` for callers that need the full verification output (verify mode only).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "success",
+              "mode"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_worktree",
+          "title": "Git Worktree",
+          "description": "Manage multiple working trees: list worktrees, add new worktrees for parallel work, remove worktrees, or move worktrees to new locations.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "default": ".",
+                "description": "Path to the Git repository. Defaults to session working directory set via git_set_working_dir.",
+                "type": "string"
+              },
+              "mode": {
+                "default": "list",
+                "description": "The worktree operation to perform.",
+                "type": "string",
+                "enum": [
+                  "list",
+                  "add",
+                  "remove",
+                  "move",
+                  "prune"
+                ]
+              },
+              "worktreePath": {
+                "description": "Path for the new worktree (for add/move operations). Must not start with \"-\".",
+                "type": "string",
+                "minLength": 1
+              },
+              "branch": {
+                "description": "For add operation: create a NEW branch with this name in the new worktree. Fails if the branch already exists — use `commitish` to check out an existing branch instead.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "commitish": {
+                "description": "For add operation: check out this existing branch/commit/tag in the new worktree (no new branch is created).",
+                "type": "string",
+                "minLength": 1
+              },
+              "force": {
+                "default": false,
+                "description": "Force operation (for remove operation with uncommitted changes).",
+                "type": "boolean"
+              },
+              "newPath": {
+                "description": "New path for the worktree (for move operation). Must not start with \"-\".",
+                "type": "string",
+                "minLength": 1
+              },
+              "detach": {
+                "default": false,
+                "description": "Create worktree with detached HEAD (for add operation).",
+                "type": "boolean"
+              },
+              "verbose": {
+                "default": false,
+                "description": "Provide detailed output for worktree operations.",
+                "type": "boolean"
+              },
+              "dryRun": {
+                "default": false,
+                "description": "Preview the operation without executing it (for prune operation).",
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "description": "Indicates if the operation was successful."
+              },
+              "mode": {
+                "type": "string",
+                "description": "Operation mode that was performed."
+              },
+              "worktrees": {
+                "description": "List of worktrees (for list mode).",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "description": "Absolute path to the worktree."
+                    },
+                    "head": {
+                      "type": "string",
+                      "description": "HEAD commit hash in this worktree."
+                    },
+                    "branch": {
+                      "description": "Branch checked out (if not detached).",
+                      "type": "string"
+                    },
+                    "bare": {
+                      "type": "boolean",
+                      "description": "Whether worktree is bare."
+                    },
+                    "detached": {
+                      "type": "boolean",
+                      "description": "Whether HEAD is detached."
+                    },
+                    "locked": {
+                      "type": "boolean",
+                      "description": "Whether the worktree is locked."
+                    },
+                    "prunable": {
+                      "type": "boolean",
+                      "description": "Whether the worktree can be pruned."
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "head",
+                    "bare",
+                    "detached",
+                    "locked",
+                    "prunable"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "added": {
+                "description": "Added worktree path (for add mode).",
+                "type": "string"
+              },
+              "removed": {
+                "description": "Removed worktree path (for remove mode).",
+                "type": "string"
+              },
+              "moved": {
+                "description": "Move operation info (for move mode).",
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "from",
+                  "to"
+                ],
+                "additionalProperties": false
+              },
+              "pruned": {
+                "description": "Pruned worktree paths (for prune mode).",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "success",
+              "mode"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": false
+          }
+        },
+        {
+          "name": "git_wrapup_instructions",
+          "title": "Git Wrap-up Instructions",
+          "description": "Returns a Git wrap-up protocol: an acceptance-criteria checklist the agent must satisfy before the session is considered shipped. Uses the operator's custom instructions if configured, otherwise emits a generic goals-strict/mechanism-generic default. Enriches the response with a repository snapshot (status, recent commits, recent tags) so the agent has immediate orientation for the commit and release steps.",
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "acknowledgement": {
+                "type": "string",
+                "enum": [
+                  "Y",
+                  "y",
+                  "Yes",
+                  "yes"
+                ],
+                "description": "Acknowledgement to initiate the wrap-up workflow."
+              },
+              "createTag": {
+                "description": "Controls whether the tag criterion appears in the emitted protocol. Omit or set `true` to include the tag step. Set `false` to omit it entirely — e.g., when tagging is deferred to a separate release step.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "acknowledgement"
+            ],
+            "additionalProperties": false
+          },
+          "outputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "instructions": {
+                "type": "string",
+                "description": "The wrap-up protocol to satisfy before the session ships."
+              },
+              "repository": {
+                "description": "Best-effort repository snapshot. Omitted when no working directory is set or when the path is not a git repository.",
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "object",
+                    "properties": {
+                      "branch": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Current branch (null on detached HEAD)."
+                      },
+                      "isClean": {
+                        "type": "boolean",
+                        "description": "True when the working tree has no changes."
+                      },
+                      "staged": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Paths staged for the next commit."
+                      },
+                      "unstaged": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Paths with unstaged modifications."
+                      },
+                      "untracked": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Untracked paths."
+                      },
+                      "conflicts": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Paths with merge conflicts."
+                      },
+                      "upstream": {
+                        "description": "Upstream ref being tracked by the current branch.",
+                        "type": "string"
+                      },
+                      "ahead": {
+                        "description": "Commits ahead of upstream (if tracking).",
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "behind": {
+                        "description": "Commits behind upstream (if tracking).",
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "branch",
+                      "isClean",
+                      "staged",
+                      "unstaged",
+                      "untracked",
+                      "conflicts"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "recentCommits": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "hash": {
+                          "type": "string",
+                          "description": "Short commit hash."
+                        },
+                        "author": {
+                          "type": "string",
+                          "description": "Author name."
+                        },
+                        "date": {
+                          "type": "string",
+                          "description": "Author date (ISO 8601)."
+                        },
+                        "subject": {
+                          "type": "string",
+                          "description": "First line of the commit message."
+                        }
+                      },
+                      "required": [
+                        "hash",
+                        "author",
+                        "date",
+                        "subject"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "description": "Up to 2 most recent commits on the current branch."
+                  },
+                  "recentTags": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "description": "Tag name."
+                        },
+                        "date": {
+                          "description": "Creator date (ISO 8601); absent for lightweight tags with no metadata.",
+                          "type": "string"
+                        },
+                        "tagger": {
+                          "description": "Tagger identity (annotated tags only).",
+                          "type": "string"
+                        },
+                        "annotationSubject": {
+                          "description": "First line of the tag annotation (annotated tags only).",
+                          "type": "string"
+                        },
+                        "annotationBody": {
+                          "description": "Remaining annotation body after the subject (annotated tags only).",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "description": "Up to 2 most recent tags by creator date."
+                  }
+                },
+                "required": [
+                  "status",
+                  "recentCommits",
+                  "recentTags"
+                ],
+                "additionalProperties": false
+              },
+              "enrichmentWarnings": {
+                "description": "Actionable notes when snapshot gathering was skipped or partially failed.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "instructions"
+            ],
+            "additionalProperties": false
+          },
+          "annotations": {
+            "readOnlyHint": true
+          }
+        }
+      ],
+      "prompts": [
+        {
+          "name": "git_wrapup",
+          "description": "Orchestrates a full git wrap-up: loads the project-aware acceptance-criteria protocol from git_wrapup_instructions, analyzes changes, satisfies each criterion per project convention, commits atomically, and (optionally) tags the release.",
+          "arguments": [
+            {
+              "name": "changelogPath",
+              "description": "Path to the changelog file when the project uses a flat one (defaults to CHANGELOG.md). The protocol itself defers to project convention.",
+              "required": false
+            },
+            {
+              "name": "createTag",
+              "description": "Whether to include the tag criterion in the protocol ('true' | 'false'). Defaults to 'true' — set to 'false' when tagging is deferred to a separate release step.",
+              "required": false
+            }
+          ]
+        }
+      ],
+      "resources": [
+        {
+          "title": "Git Working Directory",
+          "description": "Provides the current session working directory for git operations. This is the directory set via git_set_working_dir and used as the default for all git commands.",
+          "mimeType": "application/json",
+          "uri": "git://working-directory",
+          "name": "Git Working Directory"
+        }
+      ],
+      "resourceTemplates": [
+        {
+          "name": "git-working-directory",
+          "uriTemplate": "git://working-directory",
+          "title": "Git Working Directory",
+          "description": "Provides the current session working directory for git operations. This is the directory set via git_set_working_dir and used as the default for all git commands.",
+          "mimeType": "application/json"
+        }
+      ]
+    }
+  }
+}

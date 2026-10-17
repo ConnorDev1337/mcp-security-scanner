@@ -1,6 +1,6 @@
 {
   "generator": "mcp-security-scanner/0.1.0",
-  "generated_at": "2026-10-16T23:34:01+00:00",
+  "generated_at": "2026-10-17T04:35:10+00:00",
   "servers": {
     "notion": {
       "serverInfo": {
@@ -6418,7 +6418,10 @@
             "destructiveHint": true
           }
         }
-      ]
+      ],
+      "prompts": [],
+      "resources": [],
+      "resourceTemplates": []
     }
   }
 }

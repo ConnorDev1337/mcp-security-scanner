@@ -1,0 +1,303 @@
+{
+  "generator": "mcp-security-scanner/0.1.0",
+  "generated_at": "2026-10-17T04:35:10+00:00",
+  "servers": {
+    "terraform": {
+      "serverInfo": {
+        "name": "terraform-mcp-server",
+        "version": "1.3.0"
+      },
+      "instructions": "# Terraform MCP Server Tool Hints\n\nThe Terraform MCP server provides tools for generating better Terraform code through registry integration and automating workflows via HCP Terraform/Enterprise APIs.\n\n## Tool Usage Guidelines\n\n**BEFORE generating any Terraform code**: Query registries for latest provider/module versions and styling guidelines. When enterprise tools are enabled AND a Terraform token is provided, search private registries first, then fall back to public.\n\n**Provider Consistency**: All modules in a project must use compatible provider versions. Verify with get_provider_details before generating code.\n\n**Validation Flow**: Run terraform validate immediately after generation, then terraform plan only if validation passes. Use terraform fmt to format code as needed.\n\n**User Confirmation Required**: ALWAYS get explicit yes/no confirmation before: `create_run`, `apply_run`, `discard_run`, `cancel_run`.\n\n## Always Available Tools\n\n### Registry Tools (Always Available)\n\n- **Provider Discovery**: `get_latest_provider_version` (if unavailable in code) → `get_provider_capabilities` → `get_provider_details`\n  - `get_provider_capabilities` shows what types of resources, data sources, functions, and guides are available\n  \n- **Module Discovery**: `get_latest_module_version` (if unavailable in code) → `search_modules` → `get_module_details`\n\n- **Policy Discovery**: `search_policies` → `get_policy_details`\n\n- Use these to ensure generated code uses current versions and follows best practices\n\n## HCP Terraform/TFE Tools (When enterprise tools are enabled AND a Terraform token is provided)\n\n### Private Registry Tools\n- `search_private_providers` → `get_private_provider_details`\n- `search_private_modules` → `get_private_module_details`\n- Priority: Check private registries first when token present, public as fallback\n\n### Workspace Management\n- **Discovery**: `search_workspaces` (empty query returns all) → `get_workspace_details`\n- **Operations**: `create_workspace`, `update_workspace`, `delete_workspace_safely`, `force_unlock_workspace`\n- `delete_workspace_safely` only works if workspace has no managed resources\n\n### Run Execution\n- **Discovery**: `search_run` (empty query returns all) → `get_run_details` (supports json output)\n- **Operations**: `create_run` → `apply_run` OR `discard_run` OR `cancel_run`\n- **Monitoring**: `get_plan_details`/`get_plan_logs` for plans, `get_apply_details`/`get_apply_logs` for applies\n- Always check run status before attempting operations\n\n### Variable Management\n**Workspace Variables**:\n- `search_workspace_variables` (empty query returns all)\n- `create_workspace_variable`, `update_workspace_variable`, `delete_workspace_variable`\n\n**Variable Sets** (for sharing across workspaces/projects):\n- `search_variable_sets` → `get_variable_set_details`\n- `create_variable_set`, `update_variable_set`, `delete_variable_set`\n- `create_variable_in_variable_set`, `update_variable_in_variable_set`, `delete_variable_from_variable_set`\n- `attach/detach_variable_set_to_workspaces`, `attach/detach_variable_set_to_projects`\n\n## Workflow Patterns\n\n**Code Generation**:\n1. `search_modules`/`search_providers` for available resources\n2. `get_latest_provider_version` if no version available in existing code\n3. `get_module_details` for module requirements\n4. Generate code with discovered constraints\n\n**Run Management**:\n1. `search_workspaces` → select target\n2. `create_run` → get_run_details to monitor\n3. `get_plan_details/logs` to review changes\n4. User confirmation → `apply_run` OR `discard_run`\n\n**Variable Configuration**:\n1. `search_workspace_variables` to check existing\n2. `create/update_workspace_variable` as needed\n3. For multi-workspace: `create_variable_set` → `attach_variable_set_to_workspaces`\n\n## Error Handling\n- Registry failures: Try private first (if token), fallback to public\n- Run failures: Check `get_run_details`, get_plan_details and logs before retry\n- Variable conflicts: `search_workspace_variables` first to avoid duplicates\n- Run stuck and holds the lock: `action_run` to cancel or discard the run → `force_unlock_workspace` to unlock the workspace\n\n## Security Notes\n- Never expose TFE_TOKEN or other sensitive values in outputs\n- Document source (public/private registry) in generated code comments",
+      "tools": [
+        {
+          "annotations": {
+            "title": "Get Latest Module Version",
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Fetches the latest version of a Terraform module from the public registry",
+          "inputSchema": {
+            "properties": {
+              "module_name": {
+                "description": "The name of the module, this is usually the service or group of service the user is deploying e.g., 'security-group', 'secrets-manager' etc.",
+                "type": "string"
+              },
+              "module_provider": {
+                "description": "The name of the Terraform provider for the module, e.g., 'aws', 'google', 'azurerm' etc.",
+                "type": "string"
+              },
+              "module_publisher": {
+                "description": "The publisher of the module, e.g., 'hashicorp', 'aws-ia', 'terraform-google-modules', 'Azure' etc.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "module_publisher",
+              "module_name",
+              "module_provider"
+            ],
+            "type": "object"
+          },
+          "name": "get_latest_module_version"
+        },
+        {
+          "annotations": {
+            "title": "Get Latest Provider Version",
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Fetches the latest version of a Terraform provider from the public registry",
+          "inputSchema": {
+            "properties": {
+              "name": {
+                "description": "The name of the Terraform provider, e.g., 'aws', 'azurerm', 'google', etc.",
+                "type": "string"
+              },
+              "namespace": {
+                "description": "The namespace of the Terraform provider, typically the name of the company, or their GitHub organization name that created the provider e.g., 'hashicorp'",
+                "type": "string"
+              }
+            },
+            "required": [
+              "namespace",
+              "name"
+            ],
+            "type": "object"
+          },
+          "name": "get_latest_provider_version"
+        },
+        {
+          "annotations": {
+            "title": "Retrieve documentation for a specific Terraform module",
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Fetches up-to-date documentation on how to use a Terraform module. You must call 'search_modules' first to obtain the exact valid and compatible module_id required to use this tool.",
+          "inputSchema": {
+            "properties": {
+              "module_id": {
+                "description": "Exact valid and compatible module_id retrieved from search_modules (e.g., 'squareops/terraform-kubernetes-mongodb/mongodb/2.1.1', 'GoogleCloudPlatform/vertex-ai/google/0.2.0')",
+                "type": "string"
+              }
+            },
+            "required": [
+              "module_id"
+            ],
+            "type": "object"
+          },
+          "name": "get_module_details"
+        },
+        {
+          "annotations": {
+            "title": "Fetch detailed Terraform policy documentation using a terraform_policy_id",
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Fetches up-to-date documentation for a specific policy from the Terraform registry. You must call 'search_policies' first to obtain the exact terraform_policy_id required to use this tool.",
+          "inputSchema": {
+            "properties": {
+              "terraform_policy_id": {
+                "description": "Matching terraform_policy_id retrieved from the 'search_policies' tool (e.g., 'policies/hashicorp/CIS-Policy-Set-for-AWS-Terraform/1.0.1')",
+                "type": "string"
+              }
+            },
+            "required": [
+              "terraform_policy_id"
+            ],
+            "type": "object"
+          },
+          "name": "get_policy_details"
+        },
+        {
+          "annotations": {
+            "title": "Get Terraform provider capabilities and supported features",
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Get the capabilities of a Terraform provider including the types of resources, data sources, functions, guides, and other features it supports.\nThis tool analyzes the provider documentation to determine what types of capabilities are available:\n- resources: Infrastructure resources that can be created/managed\n- data-sources: Read-only data sources for querying existing infrastructure  \n- functions: Provider-specific functions for data transformation\n- guides: Documentation guides and tutorials for using the provider\n- actions: Available provider actions (if any)\n- ephemeral resources: Temporary resources for credentials and tokens\n- list-resources: List resources for querying existing cloud resources (Terraform Search)\n\nReturns a summary with counts and examples for each capability type.",
+          "inputSchema": {
+            "properties": {
+              "name": {
+                "description": "The name of the Terraform provider, e.g., 'aws', 'azurerm', 'google', etc.",
+                "type": "string"
+              },
+              "namespace": {
+                "description": "The namespace of the Terraform provider, typically the name of the company, or their GitHub organization name that created the provider e.g., 'hashicorp'",
+                "type": "string"
+              },
+              "version": {
+                "description": "The version of the provider to analyze (defaults to 'latest')",
+                "type": "string"
+              }
+            },
+            "required": [
+              "namespace",
+              "name"
+            ],
+            "type": "object"
+          },
+          "name": "get_provider_capabilities"
+        },
+        {
+          "annotations": {
+            "title": "Fetch detailed Terraform provider documentation using a document ID",
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Fetches up-to-date documentation for a specific service from a Terraform provider. \nYou must call 'search_providers' tool first to obtain the exact tfprovider-compatible provider_doc_id required to use this tool.",
+          "inputSchema": {
+            "properties": {
+              "provider_doc_id": {
+                "description": "Exact tfprovider-compatible provider_doc_id, (e.g., '8894603', '8906901') retrieved from 'search_providers'",
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider_doc_id"
+            ],
+            "type": "object"
+          },
+          "name": "get_provider_details"
+        },
+        {
+          "annotations": {
+            "title": "Search and match Terraform modules based on name and relevance",
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Resolves a Terraform module name to obtain a compatible module_id for the get_module_details tool and returns a list of matching Terraform modules.\nYou MUST call this function before 'get_module_details' to obtain a valid and compatible module_id.\nWhen selecting the best match, consider the following:\n\t- Name similarity to the query\n\t- Description relevance\n\t- Verification status (verified)\n\t- Download counts (popularity)\nReturn the selected module_id and explain your choice. If there are multiple good matches, mention this but proceed with the most relevant one.\nIf no modules were found, reattempt the search with a new moduleName query.",
+          "inputSchema": {
+            "properties": {
+              "current_offset": {
+                "default": 0,
+                "description": "Current offset for pagination",
+                "minimum": 0,
+                "type": "number"
+              },
+              "module_query": {
+                "description": "The query to search for Terraform modules.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "module_query"
+            ],
+            "type": "object"
+          },
+          "name": "search_modules"
+        },
+        {
+          "annotations": {
+            "title": "Search and match Terraform policies based on name and relevance",
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "Searches for Terraform policies based on a query string.\nThis tool returns a list of matching policies, which can be used to retrieve detailed policy information using the 'get_policy_details' tool.\nYou MUST call this function before 'get_policy_details' to obtain a valid terraform_policy_id.\nWhen selecting the best match, consider the following:\n\t- Name similarity to the query\n\t- Title relevance\n\t- Verification status (verified)\n\t- Download counts (popularity)\nReturn the selected policyID and explain your choice. If there are multiple good matches, mention this but proceed with the most relevant one.\nIf no policies were found, reattempt the search with a new policy_query.",
+          "inputSchema": {
+            "properties": {
+              "policy_query": {
+                "description": "The query to search for Terraform modules.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "policy_query"
+            ],
+            "type": "object"
+          },
+          "name": "search_policies"
+        },
+        {
+          "annotations": {
+            "title": "Identify the most relevant provider document ID for a Terraform service",
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": true
+          },
+          "description": "This tool retrieves a list of potential documents based on the 'service_slug' and 'provider_document_type' provided.\nYou MUST call this function before 'get_provider_details' to obtain a valid tfprovider-compatible 'provider_doc_id'.\nUse the most relevant single word as the search query for 'service_slug', if unsure about the 'service_slug', use the 'provider_name' for its value.\nWhen selecting the best match, consider the following:\n\t- Title similarity to the query\n\t- Category relevance\nReturn the selected 'provider_doc_id' and explain your choice.\nIf there are multiple good matches, mention this but proceed with the most relevant one.",
+          "inputSchema": {
+            "properties": {
+              "provider_document_type": {
+                "description": "The type of the document to retrieve,\nfor general overview of the provider use 'overview',\nfor guidance on upgrading a provider or custom configuration information use 'guides',\nfor deploying resources use 'resources', for reading pre-deployed resources use 'data-sources',\nfor functions use 'functions',\nfor Terraform actions use 'actions',\nfor listing resources using Terraform Search use 'list-resources'",
+                "enum": [
+                  "resources",
+                  "data-sources",
+                  "functions",
+                  "guides",
+                  "overview",
+                  "actions",
+                  "list-resources"
+                ],
+                "type": "string"
+              },
+              "provider_name": {
+                "description": "The name of the Terraform provider to perform the read or deployment operation",
+                "type": "string"
+              },
+              "provider_namespace": {
+                "description": "The publisher of the Terraform provider, typically the name of the company, or their GitHub organization name that created the provider",
+                "type": "string"
+              },
+              "provider_version": {
+                "description": "The version of the Terraform provider to retrieve in the format 'x.y.z', or 'latest' to get the latest version",
+                "type": "string"
+              },
+              "service_slug": {
+                "description": "The slug of the service you want to deploy or read using the Terraform provider, prefer using a single word, use underscores for multiple words and if unsure about the service_slug, use the provider_name for its value",
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider_name",
+              "provider_namespace",
+              "service_slug",
+              "provider_document_type"
+            ],
+            "type": "object"
+          },
+          "name": "search_providers"
+        }
+      ],
+      "prompts": [],
+      "resources": [
+        {
+          "uri": "/terraform/module-development",
+          "name": "Terraform Module Development Guide",
+          "description": "Terraform Module Development Guide",
+          "mimeType": "text/markdown"
+        },
+        {
+          "uri": "/terraform/style-guide",
+          "name": "Terraform Style Guide",
+          "description": "Terraform Style Guide",
+          "mimeType": "text/markdown"
+        }
+      ],
+      "resourceTemplates": [
+        {
+          "uriTemplate": "registry:/providers/{namespace}/name/{name}/version/{version}",
+          "name": "Provider details",
+          "description": "Describes details for a Terraform provider",
+          "mimeType": "application/json"
+        }
+      ]
+    }
+  }
+}

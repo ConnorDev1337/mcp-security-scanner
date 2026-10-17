@@ -1,6 +1,6 @@
 {
   "generator": "mcp-security-scanner/0.1.0",
-  "generated_at": "2026-10-16T23:34:01+00:00",
+  "generated_at": "2026-10-17T04:35:10+00:00",
   "servers": {
     "everything": {
       "serverInfo": {
@@ -399,6 +399,121 @@
           "execution": {
             "taskSupport": "required"
           }
+        }
+      ],
+      "prompts": [
+        {
+          "name": "simple-prompt",
+          "title": "Simple Prompt",
+          "description": "A prompt with no arguments"
+        },
+        {
+          "name": "args-prompt",
+          "title": "Arguments Prompt",
+          "description": "A prompt with two arguments, one required and one optional",
+          "arguments": [
+            {
+              "name": "city",
+              "description": "Name of the city",
+              "required": true
+            },
+            {
+              "name": "state",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "completable-prompt",
+          "title": "Team Management",
+          "description": "First argument choice narrows values for second argument.",
+          "arguments": [
+            {
+              "name": "department",
+              "description": "Choose the department.",
+              "required": true
+            },
+            {
+              "name": "name",
+              "description": "Choose a team member to lead the selected department.",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "resource-prompt",
+          "title": "Resource Prompt",
+          "description": "A prompt that includes an embedded resource reference",
+          "arguments": [
+            {
+              "name": "resourceType",
+              "description": "Type of resource to fetch",
+              "required": true
+            },
+            {
+              "name": "resourceId",
+              "description": "ID of the text resource to fetch",
+              "required": true
+            }
+          ]
+        }
+      ],
+      "resources": [
+        {
+          "uri": "demo://resource/static/document/architecture.md",
+          "name": "architecture.md",
+          "mimeType": "text/markdown",
+          "description": "Static document file exposed from /docs: architecture.md"
+        },
+        {
+          "uri": "demo://resource/static/document/extension.md",
+          "name": "extension.md",
+          "mimeType": "text/markdown",
+          "description": "Static document file exposed from /docs: extension.md"
+        },
+        {
+          "uri": "demo://resource/static/document/features.md",
+          "name": "features.md",
+          "mimeType": "text/markdown",
+          "description": "Static document file exposed from /docs: features.md"
+        },
+        {
+          "uri": "demo://resource/static/document/how-it-works.md",
+          "name": "how-it-works.md",
+          "mimeType": "text/markdown",
+          "description": "Static document file exposed from /docs: how-it-works.md"
+        },
+        {
+          "uri": "demo://resource/static/document/instructions.md",
+          "name": "instructions.md",
+          "mimeType": "text/markdown",
+          "description": "Static document file exposed from /docs: instructions.md"
+        },
+        {
+          "uri": "demo://resource/static/document/startup.md",
+          "name": "startup.md",
+          "mimeType": "text/markdown",
+          "description": "Static document file exposed from /docs: startup.md"
+        },
+        {
+          "uri": "demo://resource/static/document/structure.md",
+          "name": "structure.md",
+          "mimeType": "text/markdown",
+          "description": "Static document file exposed from /docs: structure.md"
+        }
+      ],
+      "resourceTemplates": [
+        {
+          "name": "Dynamic Text Resource",
+          "uriTemplate": "demo://resource/dynamic/text/{resourceId}",
+          "mimeType": "text/plain",
+          "description": "Plaintext dynamic resource fabricated from the {resourceId} variable, which must be an integer."
+        },
+        {
+          "name": "Dynamic Blob Resource",
+          "uriTemplate": "demo://resource/dynamic/blob/{resourceId}",
+          "mimeType": "application/octet-stream",
+          "description": "Binary (base64) dynamic resource fabricated from the {resourceId} variable, which must be an integer."
         }
       ]
     }

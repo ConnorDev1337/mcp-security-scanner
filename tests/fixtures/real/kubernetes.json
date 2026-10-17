@@ -1,6 +1,6 @@
 {
   "generator": "mcp-security-scanner/0.1.0",
-  "generated_at": "2026-10-16T23:34:01+00:00",
+  "generated_at": "2026-10-17T04:35:10+00:00",
   "servers": {
     "kubernetes": {
       "serverInfo": {
@@ -1150,7 +1150,59 @@
             "readOnlyHint": true
           }
         }
-      ]
+      ],
+      "prompts": [
+        {
+          "name": "k8s-diagnose",
+          "description": "Diagnose Kubernetes Resources.",
+          "arguments": [
+            {
+              "name": "keyword",
+              "description": "A keyword to search pod/node names.",
+              "required": true
+            },
+            {
+              "name": "namespace",
+              "description": "Optional: Specify a namespace to narrow down the search.",
+              "required": false,
+              "default": "all"
+            }
+          ]
+        }
+      ],
+      "resources": [
+        {
+          "uri": "k8s://default/pods",
+          "name": "Kubernetes Pods",
+          "mimeType": "application/json",
+          "description": "List of pods in the default namespace"
+        },
+        {
+          "uri": "k8s://default/deployments",
+          "name": "Kubernetes Deployments",
+          "mimeType": "application/json",
+          "description": "List of deployments in the default namespace"
+        },
+        {
+          "uri": "k8s://default/services",
+          "name": "Kubernetes Services",
+          "mimeType": "application/json",
+          "description": "List of services in the default namespace"
+        },
+        {
+          "uri": "k8s://namespaces",
+          "name": "Kubernetes Namespaces",
+          "mimeType": "application/json",
+          "description": "List of all namespaces"
+        },
+        {
+          "uri": "k8s://nodes",
+          "name": "Kubernetes Nodes",
+          "mimeType": "application/json",
+          "description": "List of all nodes in the cluster"
+        }
+      ],
+      "resourceTemplates": []
     }
   }
 }
