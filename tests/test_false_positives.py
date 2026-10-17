@@ -8,7 +8,7 @@ import pytest
 
 from mcp_scanner.engine import analyze
 from mcp_scanner.models import ServerInventory, ToolDefinition
-from mcp_scanner.rules.capabilities import classify_name
+from mcp_scanner.rules.capabilities import classify_name, classify_tool
 from mcp_scanner.rules.poisoning import scan_text
 
 
@@ -54,6 +54,25 @@ def test_ambiguous_capability_words_are_judged_by_context(name, description, exp
 def test_names_without_description_stay_conservative(name):
     # Auto-approve lists carry only names, so ambiguous words still count there.
     assert classify_name(name) is not None
+
+
+@pytest.mark.parametrize(
+    ("description", "expected"),
+    [
+        # @heroku/mcp-server deploy_one_off_dyno was missed: no "arbitrary" or "shell".
+        ("Run code/commands in Heroku one-off dyno with network and filesystem access.", "exec"),
+        ("Executes commands on the remote host.", "exec"),
+        ("Run arbitrary shell commands on the host.", "exec"),
+        ("Runs scripts.", "exec"),
+        ("Run code analysis on the repository.", None),
+        ("Runs the code formatter on a file.", None),
+        ("Execute a SELECT query on the SQLite database", None),
+    ],
+)
+def test_execution_is_judged_from_the_description(description, expected):
+    tool = ToolDefinition("dyno", {"name": "dyno", "description": description})
+    capability = classify_tool(tool)
+    assert (capability[0] if capability else None) == expected
 
 
 # --------------------------------------------------------------------------- MCPS212

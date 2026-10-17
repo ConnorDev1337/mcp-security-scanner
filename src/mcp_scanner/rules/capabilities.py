@@ -160,6 +160,10 @@ _EXEC_DESCRIPTION = re.compile(
     r"\b(?:execute|executes|run|runs|evaluate|evaluates)\b[^.]{0,30}?"
     r"\b(?:arbitrary|any|shell|system|terminal|bash|powershell|python|javascript|sql)\b[^.]{0,20}?"
     r"\b(?:commands?|code|scripts?|statements?|quer(?:y|ies))\b"
+    # An unqualified object ("Run code/commands in a dyno") is free-form too, unless it is
+    # part of a longer noun ("run code analysis").
+    r"|\b(?:execute|executes|run|runs)\s+(?:code|commands?|scripts?)"
+    r"(?=\s*(?:$|[/.,;:)])|\s+(?:in|on|inside|within|against|via|through|from|with|as|and|or)\b)"
 )
 
 _LABELS = {
