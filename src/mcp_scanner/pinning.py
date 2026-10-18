@@ -160,6 +160,11 @@ def pinned_form(value: Any, salt: bytes = b"") -> tuple[Any, str]:
     return masked, sha256_of([_DIGEST_TAG, masked, markers])
 
 
+def masked_copy(value: Any) -> Any:
+    """Return ``value`` with secrets masked as the pin file stores it (``--dump-tools``)."""
+    return _masked(value, [])
+
+
 def legacy_digest(value: Any) -> str:
     """Return the digest of ``value`` as format-2 pin files hashed prompts and resources."""
     return sha256_of(_masked(value, [], legacy=True))
@@ -507,6 +512,42 @@ def _verified(record: dict[str, Any], digest: str, legacy: Callable[[], str]) ->
     return stored == digest or (record.get("scheme") is None and stored == legacy())
 
 
+def _masked_match(record: dict[str, Any], value: Any, field: str) -> str | None:
+    """Return how ``record`` approves ``value`` seen with secrets masked on one side.
+
+    A dump written by ``--dump-tools`` masks the secrets of every definition, so its
+    items cannot reproduce a digest that binds the secret values, and an item pinned
+    from such a dump bound none. In both cases the masked forms are compared instead
+    (``field`` holds the stored one); when the record and the current item both carry
+    the secret values, only the exact digest approves. Return ``"masked"`` when the
+    current item holds no secret value, ``"rebind"`` when it holds values the record
+    did not bind, or None if the record does not approve it.
+    """
+    if record.get("scheme") != SCHEME:
+        return None
+    spans: list[MaskedSpan] = []
+    stored = record.get(field)
+    if _masked(value, spans) != stored:
+        return None
+    if not spans:
+        return "masked"
+    return "rebind" if record.get("sha256") == sha256_of(stored) else None
+
+
+def _rebind(
+    container: dict[str, Any],
+    key: str,
+    record: dict[str, Any],
+    fresh: dict[str, Any],
+    outcome: PinOutcome,
+) -> None:
+    """Replace a record pinned from masked definitions by one that binds the secrets."""
+    if "pinned_at" in record:
+        fresh["pinned_at"] = record["pinned_at"]
+    container[key] = fresh
+    outcome.dirty = True
+
+
 def _refresh(
     container: dict[str, Any],
     key: str,
@@ -707,6 +748,13 @@ def _check_items(
                 if not frozen:
                     _refresh(approved, key, record, _item_record(prepared, now, salt), outcome)
                 continue
+            match = (
+                _masked_match(record, prepared, "definition") if isinstance(record, dict) else None
+            )
+            if match is not None:
+                if match == "rebind" and not frozen:
+                    _rebind(approved, key, record, _item_record(prepared, now, salt), outcome)
+                continue
             if update:
                 approved[key] = _item_record(prepared, now, salt)
                 outcome.approved_changes += 1
@@ -878,6 +926,10 @@ def check_pins(
             if not frozen:
                 fresh = _instructions_record(instructions, salt)
                 _refresh(entry, "instructions", approved_instructions, fresh, outcome)
+        elif match := _masked_match(approved_instructions, instructions, "text"):
+            if match == "rebind" and not frozen:
+                fresh = _instructions_record(instructions, salt)
+                _rebind(entry, "instructions", approved_instructions, fresh, outcome)
         elif update:
             entry["instructions"] = _instructions_record(instructions, salt)
             outcome.approved_changes += 1
@@ -917,6 +969,9 @@ def check_pins(
                 if not frozen:
                     fresh = _tool_record(tool, now, salt)
                     _refresh(tools_entry, tool_name, record, fresh, outcome)
+            elif match := _masked_match(record, tool.raw, "definition"):
+                if match == "rebind" and not frozen:
+                    _rebind(tools_entry, tool_name, record, _tool_record(tool, now, salt), outcome)
             else:
                 if update:
                     tools_entry[tool_name] = _tool_record(tool, now, salt)

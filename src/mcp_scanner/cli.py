@@ -65,7 +65,13 @@ def _parser() -> argparse.ArgumentParser:
     scan.add_argument(
         "--dump-tools",
         metavar="FILE",
-        help="save collected tool, prompt and resource definitions (re-loadable with --tools)",
+        help="save collected tool, prompt and resource definitions (re-loadable with --tools), "
+        "with secrets masked as in the pin file",
+    )
+    scan.add_argument(
+        "--dump-raw",
+        action="store_true",
+        help="write the --dump-tools definitions verbatim, secrets included (do not commit)",
     )
 
     pins = scan.add_argument_group("hash pinning")
@@ -158,6 +164,9 @@ def _cmd_scan(args: argparse.Namespace) -> int:
     if args.no_pins and (args.update_pins or args.frozen_pins or args.pins):
         print("error: --no-pins cannot be combined with other pin options", file=sys.stderr)
         return 2
+    if args.dump_raw and not args.dump_tools:
+        print("error: --dump-raw requires --dump-tools", file=sys.stderr)
+        return 2
     root = Path(args.root) if args.root else Path.cwd()
     options = ScanOptions(
         configs=args.configs,
@@ -177,7 +186,13 @@ def _cmd_scan(args: argparse.Namespace) -> int:
     report = run_scan(options)
 
     if args.dump_tools:
-        dump_inventories(report.inventories, args.dump_tools)
+        if args.dump_raw:
+            print(
+                f"warning: --dump-raw writes the definitions to {args.dump_tools} verbatim, "
+                "including any secret they embed; do not commit it",
+                file=sys.stderr,
+            )
+        dump_inventories(report.inventories, args.dump_tools, raw=args.dump_raw)
     output = _render(args.format, report, args, root)
     if args.output:
         _write(args.output, output)

@@ -117,6 +117,10 @@ Descriptions live on the server, not in the configuration. There are two ways to
   (paginated) when the server advertises the `prompts` or `resources` capability. **It executes
   the server command**: only use it inside a container/VM and with servers you would run anyway.
   Save the result with `--dump-tools` to rescan offline (the dump includes prompts and resources).
+  The dump is meant to be committed, so it masks provider tokens and URL credentials in every
+  string, names included, exactly as the pin file does (`ghp_****(40 chars)`, `token=****`);
+  `--dump-raw` writes the definitions verbatim instead and prints a warning: do not commit that
+  file.
   Hardening: minimal environment (only `PATH`, `HOME`, temp directories... plus the server's own
   variables, not your whole environment), server requests (*sampling*, *roots*) are refused, a
   single global deadline for every request, the process tree is killed, HTTP redirects are not
@@ -321,7 +325,7 @@ change:
 Recommended workflow in a repository:
 
 ```bash
-# 1. In a sandbox: fetch tools, review findings and pin
+# 1. In a sandbox: fetch tools, review findings and pin (the dump has its secrets masked)
 mcp-scanner scan .mcp.json --introspect --dump-tools mcp-tools.json --pins mcp-pins.json
 git add mcp-tools.json mcp-pins.json            # after reviewing the report
 
@@ -337,6 +341,13 @@ mcp-scanner scan .mcp.json --tools mcp-tools.json --pins mcp-pins.json --update-
 mcp-scanner scan .mcp.json --tools mcp-tools.json --pins mcp-pins.json --frozen-pins
 ```
 
+The committed dump holds masked definitions while live introspection sees the secrets, so a
+definition that embeds one is verified on the masked form whenever one side lacks the values:
+a masked dump matches pins made from the live definitions, and pins approved from the dump match
+the live definitions (the next live run binds their values in the pin file). A change inside a
+masked value is therefore only detected between two live runs. When both the pins and the current
+definitions carry the values, only an exact match approves.
+
 ## Outputs and exit codes
 
 | Option | Effect |
@@ -344,6 +355,8 @@ mcp-scanner scan .mcp.json --tools mcp-tools.json --pins mcp-pins.json --frozen-
 | `-f table\|json\|sarif` | Format on stdout (default `table`) |
 | `-o FILE` | Write the main format to a file |
 | `--json F`, `--sarif F` | Additional outputs in the same run |
+| `--dump-tools F` | Save the definitions as a re-loadable manifest, secrets masked |
+| `--dump-raw` | With `--dump-tools`: write them verbatim (warns; do not commit) |
 | `--min-severity S` | Hide findings below `S` (does not affect `--fail-on`) |
 | `--fail-on S\|none` | Threshold for the exit code (default `high`) |
 | `--color auto\|always\|never` | Color in the table (honors `NO_COLOR`) |
@@ -493,8 +506,10 @@ Everything it analyzes is untrusted input, so:
   length. Launch components are hashed, not stored, but the hash covers literal arguments and URLs,
   so a weak password written in the configuration could be guessed from it by someone who also
   knows the rest of the command line.
-- `--dump-tools` writes definitions verbatim (offline scans need the real text); review the dump,
-  and the `MCPS301` findings about it, before committing it.
+- `--dump-tools` masks the secrets it recognizes (provider tokens, URL passwords and sensitive
+  query values), not every credential: a password in free text stays in the dump. Review it,
+  and the `MCPS301`/`MCPS302` findings, before committing it. Offline scans of a masked dump do
+  not see the masked values; the text rules see them on every live run.
 - Servers whose resource lists change often (one resource per file or row) produce `MCPS408`/
   `MCPS409` on every run with pinning; they are *low* by default and below the default
   `--fail-on high`.

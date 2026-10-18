@@ -40,6 +40,7 @@ from .models import (
     ToolDefinition,
     join_pointer,
 )
+from .pinning import masked_copy
 
 
 class ManifestError(Exception):
@@ -242,12 +243,22 @@ def _dump_entry(inv: ServerInventory) -> dict[str, Any]:
     return entry
 
 
-def dump_inventories(inventories: list[ServerInventory], path: str | Path) -> None:
-    """Write inventories in the multi-server manifest format (re-loadable)."""
+def dump_inventories(
+    inventories: list[ServerInventory], path: str | Path, *, raw: bool = False
+) -> None:
+    """Write inventories in the multi-server manifest format (re-loadable).
+
+    The dump is meant to be committed next to the pin file, so provider tokens and
+    URL credentials are masked in every string, server names included, exactly as
+    in the pin file; pins verify against the masked definitions. ``raw`` writes the
+    definitions verbatim instead.
+    """
+    servers: dict[str, Any] = {inv.server: _dump_entry(inv) for inv in inventories}
     payload = {
         "generator": f"{TOOL_NAME}/{__version__}",
         "generated_at": _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds"),
-        "servers": {inv.server: _dump_entry(inv) for inv in inventories},
+        "masked": not raw,
+        "servers": servers if raw else masked_copy(servers),
     }
     # LF on every platform, as the dump may be committed; a lone surrogate is written as
     # its JSON escape, which reads back as the same character.

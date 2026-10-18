@@ -1,4 +1,6 @@
 import json
+import random
+import string
 import subprocess
 import sys
 from pathlib import Path
@@ -333,3 +335,90 @@ def test_written_files_use_lf_line_endings(capsys, fixtures, tmp_path):
     for path in out.iterdir():
         data = path.read_bytes()
         assert b"\n" in data and b"\r" not in data, path.name
+
+
+_DUMP_RNG = random.Random(11)
+
+
+def _secret_manifest(write_json):
+    token = "ghp_" + "".join(_DUMP_RNG.choices(string.ascii_letters + string.digits, k=36))
+    password = "Tr0ub4dor-" + "".join(_DUMP_RNG.choices(string.ascii_lowercase, k=6))
+    tool = {
+        "name": "query",
+        "description": f"Runs a query; the API key is {token}.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "dsn": {"type": "string", "default": f"https://admin:{password}@db.internal/app"}
+            },
+        },
+    }
+    manifest = {
+        "servers": {
+            "db": {
+                "instructions": f"Authenticate with {token}.",
+                "tools": [tool],
+                "prompts": [{"name": "report", "description": f"Uses {token}"}],
+                "resources": [{"uri": f"https://h/x?token={password}", "name": "x"}],
+            }
+        }
+    }
+    return write_json("secret-tools.json", manifest), token, password
+
+
+def test_dump_tools_masks_secrets_by_default(capsys, write_json, tmp_path):
+    manifest, token, password = _secret_manifest(write_json)
+    dump = tmp_path / "dump.json"
+    code, _, err = run(capsys, "scan", "-t", str(manifest), "--no-pins", "--dump-tools", str(dump))
+    assert code == 1 and "warning" not in err
+    text = dump.read_text(encoding="utf-8")
+    assert token not in text and password not in text
+    data = json.loads(text)
+    assert data["masked"] is True
+    db = data["servers"]["db"]
+    assert db["tools"][0]["description"] == "Runs a query; the API key is ghp_****(40 chars)."
+    assert db["resources"][0]["uri"] == "https://h/x?token=****"
+    # The masked dump stays a valid manifest.
+    code, out, _ = run(capsys, "scan", "-t", str(dump), "--no-pins", "-f", "json")
+    report = json.loads(out)
+    assert report["inventories"][0]["tools"] == ["query"]
+    assert not [n for n in report["notices"] if n["level"] == "error"]
+
+
+def test_dump_raw_writes_verbatim_with_a_warning(capsys, write_json, tmp_path):
+    manifest, token, password = _secret_manifest(write_json)
+    dump = tmp_path / "dump.json"
+    _, _, err = run(
+        capsys, "scan", "-t", str(manifest), "--no-pins", "--dump-tools", str(dump), "--dump-raw"
+    )
+    assert "warning: --dump-raw" in err and "do not commit" in err
+    text = dump.read_text(encoding="utf-8")
+    assert token in text and password in text
+    assert json.loads(text)["masked"] is False
+
+
+def test_dump_raw_requires_dump_tools(capsys, write_json):
+    manifest, _, _ = _secret_manifest(write_json)
+    code, _, err = run(capsys, "scan", "-t", str(manifest), "--no-pins", "--dump-raw")
+    assert code == 2 and "--dump-raw requires --dump-tools" in err
+
+
+def test_pins_verify_across_raw_definitions_and_masked_dumps(capsys, write_json, tmp_path):
+    # README workflow: pin from the live definitions (here the raw manifest stands for
+    # --introspect), then verify in CI against the committed, masked dump.
+    manifest, _, _ = _secret_manifest(write_json)
+    dump, pins = tmp_path / "dump.json", tmp_path / "pins.json"
+    base = ["--pins", str(pins), "-f", "json", "--fail-on", "none"]
+    run(capsys, "scan", "-t", str(manifest), "--dump-tools", str(dump), *base)
+
+    def pin_findings(source, *extra):
+        _, out, _ = run(capsys, "scan", "-t", str(source), *base, *extra)
+        return [f["rule_id"] for f in json.loads(out)["findings"] if f["rule_id"][4] == "4"]
+
+    assert pin_findings(dump, "--frozen-pins") == []
+    # Approving from the dump binds no secret; the live definitions still verify.
+    pins.unlink()
+    run(capsys, "scan", "-t", str(dump), *base)
+    assert pin_findings(manifest) == []
+    assert pin_findings(dump, "--frozen-pins") == []
+    assert pin_findings(manifest, "--frozen-pins") == []

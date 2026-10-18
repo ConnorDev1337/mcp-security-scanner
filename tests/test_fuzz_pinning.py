@@ -9,6 +9,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from fuzzing import UNICODE_TEXT, provider_tokens, scaled
+from mcp_scanner.manifest import dump_inventories, load_manifest
 from mcp_scanner.models import (
     PromptDefinition,
     ResourceDefinition,
@@ -134,6 +135,27 @@ def test_pin_files_round_trip(configs, inventories):
         assert again.findings == [] and not again.dirty
         loaded.save()  # Saving an unchanged store writes the same servers.
         assert PinStore.load(path).servers == loaded.servers
+
+
+@scaled(0.5)
+@given(INVENTORIES, st.booleans())
+def test_masked_dumps_verify_against_live_pins_and_back(inventories, pin_live_first):
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        dump, pins = folder / "dump.json", folder / "pins.json"
+        dump_inventories(inventories, dump)
+        text = dump.read_text(encoding="utf-8")
+        dumped, notices = load_manifest(str(dump))
+        assert not [n for n in notices if n.level == "error"]
+        assert len(dumped) == len(inventories)
+        assert not [s for s in find_stored_secrets(json.loads(text)) if s.span.kind == "token"]
+        first, second = (inventories, dumped) if pin_live_first else (dumped, inventories)
+        store = PinStore.load(pins)
+        check_pins(store, [], first)
+        store.save()
+        for frozen in (True, False):
+            outcome = check_pins(PinStore.load(pins), [], second, frozen=frozen)
+            assert outcome.findings == []
 
 
 # --------------------------------------------------------------------------- regressions
