@@ -1,4 +1,4 @@
-# mcp-security-scanner
+# MCP Security Scanner
 
 A **defensive** scanner for [MCP (Model Context Protocol)](https://modelcontextprotocol.io)
 servers. It analyzes MCP client configuration and the tools, prompts and resources that servers
