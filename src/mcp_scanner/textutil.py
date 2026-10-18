@@ -110,7 +110,13 @@ _CONFUSABLES = str.maketrans(
 _WS = re.compile(r"\s+")
 
 
+# The hidden characters of ASCII text: the controls other than tab, newline and return.
+_ASCII_HIDDEN = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
 def strip_hidden(text: str) -> str:
+    if text.isascii():  # Fast path: one regular expression instead of a call per character.
+        return _ASCII_HIDDEN.sub("", text)
     return "".join(ch for ch in text if not is_hidden_char(ch))
 
 

@@ -20,6 +20,7 @@ from fuzzing import (
     SEPARATORS,
     SOFT_LIMIT,
     UNICODE_TEXT,
+    assert_linear,
     provider_tokens,
     pumped_text,
     scaled,
@@ -34,7 +35,13 @@ from mcp_scanner.models import (
     ToolDefinition,
 )
 from mcp_scanner.rules import capabilities, config, poisoning, resources, secrets, unicode
-from mcp_scanner.textutil import is_hidden_char, normalize_for_matching, sanitize, snippet
+from mcp_scanner.textutil import (
+    is_hidden_char,
+    normalize_for_matching,
+    sanitize,
+    snippet,
+    strip_hidden,
+)
 
 KINDS = ["description", "parameter", "value", "name", "instructions"]
 
@@ -276,33 +283,40 @@ def _fake(n: int, alphabet: str = string.ascii_letters + string.digits) -> str:
 
 
 # Inputs on which one regular expression took quadratic time, found by pumping
-# fragments; each took from 10 seconds to minutes before its fix.
+# fragments: (function, input of size n, n). At 4 * n each took 10 to 25 seconds.
 ADVERSARIAL = {
     # "<!--.*?-->" (MCPS107) scanned to the end of the text from every "<!--".
-    "html-comment": (lambda text: poisoning.scan_text(text, "description"), "<!--" * 25_000),
+    "html-comment": (lambda text: poisoning.scan_text(text, "description"), "<!--".__mul__, 5_000),
     # The private key body could cross every later header.
-    "pem-header": (secrets.mask_spans, ("-----BEGIN PRIVATE" + " KEY-----") * 8_000),
+    "pem-header": (secrets.mask_spans, ("-----BEGIN PRIVATE" + " KEY-----").__mul__, 2_000),
     # Each letter of a long word was tried as the start of a URL scheme.
-    "url-scheme": (secrets.mask_spans, "a" * 100_000),
+    "url-scheme": (secrets.mask_spans, "a".__mul__, 25_000),
     # "${[^}]+}" scanned to the end from every "${".
-    "reference": (secrets.is_reference, "${" * 100_000),
+    "reference": (secrets.is_reference, "${".__mul__, 25_000),
     # The sentence of every MCPS104 match was searched from scratch.
-    "sentence": (lambda text: poisoning.scan_text(text, "value"), "read secrets " * 32_000),
+    "sentence": (
+        lambda text: poisoning.scan_text(text, "value"),
+        lambda n: ("read secrets " + "~" * 60 + " ") * n,
+        4_000,
+    ),
     # "curl[^|]*|" scanned to the pipe from every "curl" (MCPS202).
-    "curl": (config._DOWNLOAD_EXEC.search, "curl " * 50_000 + "| x"),
+    "curl": (config._DOWNLOAD_EXEC.search, lambda n: "curl " * n + "| x", 12_500),
     # "x-[\w-]*key[\w-]*$" re-scanned the name after every "key".
-    "header": (secrets._SENSITIVE_HEADER.match, "x-" + "key" * 30_000 + "!"),
+    "header": (secrets._SENSITIVE_HEADER.match, lambda n: "x-" + "key" * n + "!", 7_500),
     # Every provider token was compared with every token found before it.
     "tokens": (
         secrets.find_known_secrets,
-        " ".join("ghp_" + _fake(36) for _ in range(16_000)),
+        lambda n: " ".join("ghp_" + _fake(36) for _ in range(n)),
+        2_000,
     ),
 }
 
 
-@pytest.mark.parametrize(("function", "text"), ADVERSARIAL.values(), ids=ADVERSARIAL.keys())
-def test_adversarial_inputs_regressions(function, text):
-    timed(function, text)
+@pytest.mark.parametrize(
+    ("function", "make", "size"), ADVERSARIAL.values(), ids=ADVERSARIAL.keys()
+)
+def test_adversarial_inputs_regressions(function, make, size):
+    assert_linear(function, make, size)
 
 
 def test_query_credentials_after_a_masked_token_are_masked():
@@ -320,3 +334,9 @@ def test_password_redacted_as_a_token_is_kept():
     masked, spans = secrets.mask_spans(f"https://user:{token}@github.com/org/repo")
     assert masked == "https://user:ghp_****(40 chars)@github.com/org/repo"
     assert [span.kind for span in spans] == ["token"]
+
+
+@given(st.text(alphabet=st.characters(max_codepoint=0x7F)) | UNICODE_TEXT)
+def test_strip_hidden_fast_path_matches_the_definition(text):
+    expected = "".join(ch for ch in text if not is_hidden_char(ch))
+    assert strip_hidden(text) == expected

@@ -8,12 +8,12 @@ ever raise :class:`JSONLocError`.
 """
 
 import json
-import time
 
 import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
 
+from fuzzing import assert_linear
 from mcp_scanner.jsonloc import (
     MAX_DEPTH,
     JSONLocError,
@@ -236,14 +236,16 @@ def test_integer_beyond_digit_limit_is_a_syntax_error():
     assert (info.value.line, info.value.column) == (1, 7)
 
 
+def _repeated_keys(count: int) -> str:
+    body = ",".join(f'"k{i}": 0' for i in range(count))
+    return "{" + body + "," + ",".join('"a": [1, {"b": 2}]' for _ in range(count)) + "}"
+
+
 def test_repeated_keys_cost_linear_time():
     # Found by review: each repeated key scanned every recorded offset (quadratic).
-    count = 30_000
-    body = ",".join(f'"k{i}": 0' for i in range(count))
-    body += "," + ",".join('"a": [1, {"b": 2}]' for _ in range(count))
-    start = time.perf_counter()
-    value, offsets, duplicates = parse("{" + body + "}")
-    assert time.perf_counter() - start < 3
+    assert_linear(parse, _repeated_keys, 2_500)
+    count = 2_500
+    value, offsets, duplicates = parse(_repeated_keys(count))
     assert value["a"] == [1, {"b": 2}] and len(duplicates) == count - 1
     last = offsets["/a"]
     assert offsets["/a/1/b"] > last and len(offsets) == count + 5

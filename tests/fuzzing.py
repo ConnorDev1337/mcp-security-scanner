@@ -48,6 +48,35 @@ def timed(
     return result
 
 
+def _fastest(function: Callable[[Any], Any], argument: Any, runs: int = 2) -> float:
+    faulthandler.dump_traceback_later(HARD_LIMIT, exit=True)
+    try:
+        times = []
+        for _ in range(runs):
+            start = time.perf_counter()
+            function(argument)
+            times.append(time.perf_counter() - start)
+    finally:
+        faulthandler.cancel_dump_traceback_later()
+    return min(times)
+
+
+def assert_linear(
+    function: Callable[[Any], Any], make: Callable[[int], Any], size: int, factor: int = 4
+) -> None:
+    """Fail if ``function(make(n))`` grows much faster than ``n``.
+
+    The input grows ``factor`` times; linear (or n log n) code takes about ``factor``
+    times longer, quadratic code ``factor ** 2`` times. Comparing two sizes instead
+    of an absolute limit holds on slow machines and under coverage tracing.
+    """
+    small = max(_fastest(function, make(size)), 0.005)
+    large = _fastest(function, make(size * factor))
+    assert large < small * factor * 2.5, (
+        f"super-linear: {small:.3f}s at size {size}, {large:.3f}s at size {size * factor}"
+    )
+
+
 def _chars(alphabet: str, low: int, high: int) -> st.SearchStrategy[str]:
     """Return random strings: real tokens are high-entropy, unlike shrunk text."""
     return st.tuples(st.integers(low, high), st.randoms(use_true_random=False)).map(
