@@ -18,3 +18,6 @@ mcp-pins.json
 *.sarif
 report.json
 tools-dump.json
+
+# Local agent conventions, not published
+CLAUDE.md
