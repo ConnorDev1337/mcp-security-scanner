@@ -362,6 +362,10 @@ definitions carry the values, only an exact match approves.
 | `--color auto\|always\|never` | Color in the table (honors `NO_COLOR`) |
 | `--root DIR` | Base directory for relative paths in reports (default: cwd) |
 
+Every file the scanner writes (pin file, dump, `-o`, `--json`, `--sarif`, and redirected
+standard output) uses LF line endings on every platform, so committed files do not change
+between operating systems.
+
 Exit codes: `0` no findings at or above the threshold · `1` findings at or above the threshold ·
 `2` usage error or an input (config, manifest, pin file) could not be read.
 
