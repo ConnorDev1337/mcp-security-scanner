@@ -40,14 +40,27 @@ SECURITY_SEVERITY = {
 NOTICE_LEVELS = {"error": "error", "warning": "warning", "note": "note"}
 
 
+def _encodable(path: str) -> str:
+    """Replace lone surrogates, which stand for undecodable file name bytes, with U+FFFD."""
+    return "".join(chr(0xFFFD) if 0xD800 <= ord(ch) <= 0xDFFF else ch for ch in path)
+
+
+def _file_uri(path: str) -> str:
+    absolute = Path(os.path.abspath(path))
+    try:
+        return absolute.as_uri()
+    except UnicodeEncodeError:  # An undecodable file name: URIs need valid UTF-8.
+        return Path(_encodable(str(absolute))).as_uri()
+
+
 def artifact_location(path: str, root: Path) -> dict[str, str]:
     """Return a SARIF artifactLocation, relative to ``%SRCROOT%`` when under ``root``."""
     absolute = Path(os.path.abspath(path))
     try:
         relative = absolute.relative_to(os.path.abspath(root))
     except ValueError:
-        return {"uri": absolute.as_uri()}
-    return {"uri": quote(relative.as_posix()), "uriBaseId": "%SRCROOT%"}
+        return {"uri": _file_uri(path)}
+    return {"uri": quote(_encodable(relative.as_posix())), "uriBaseId": "%SRCROOT%"}
 
 
 def _physical(location: Location, root: Path) -> dict[str, Any] | None:
@@ -147,9 +160,7 @@ def build(
                         "rules": [_rule_descriptor(rule) for rule in rules],
                     }
                 },
-                "originalUriBaseIds": {
-                    "%SRCROOT%": {"uri": Path(os.path.abspath(root)).as_uri() + "/"}
-                },
+                "originalUriBaseIds": {"%SRCROOT%": {"uri": _file_uri(str(root)) + "/"}},
                 "invocations": [
                     {
                         "executionSuccessful": not any(n.level == "error" for n in report.notices),

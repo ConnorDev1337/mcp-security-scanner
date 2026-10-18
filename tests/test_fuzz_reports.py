@@ -84,3 +84,30 @@ def test_every_format_renders(report):
     for color in (False, True):
         output = table.render(report, color=color, width=100, root=ROOT)
         assert output.endswith("\n")
+
+
+def test_undecodable_file_names_still_give_valid_sarif():
+    # Found by fuzzing: a lone surrogate in a path, which stands for an undecodable file
+    # name byte (surrogateescape on POSIX), made quote() and Path.as_uri() raise.
+    name = "config-" + chr(0xDCFF) + ".json"
+    location = Location(str(ROOT / name), 3, 1)
+    report = ScanReport(
+        findings=[
+            Finding(all_rules()[0], "m", location),
+            Finding(all_rules()[0], "n", Location(name)),
+        ],
+        servers=[],
+        inventories=[],
+        documents=[],
+        notices=[Notice("error", "cannot parse", str(Path(ROOT.anchor) / name))],
+        pins=None,
+        started_at="2026-01-01T00:00:00+00:00",
+        finished_at="2026-01-01T00:00:01+00:00",
+    )
+    payload = sarif.build(report, root=ROOT)
+    assert not list(VALIDATOR.iter_errors(payload))
+    uris = [
+        r["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+        for r in payload["runs"][0]["results"]
+    ]
+    assert all("config-%EF%BF%BD.json" in uri for uri in uris)

@@ -253,7 +253,11 @@ def _masked_or_reference(value: str) -> bool:
     return "****" in decoded or secrets.is_reference(decoded)
 
 
-@given(credential_urls(), SEPARATORS, SEPARATORS)
+# Text around a URL that cannot be part of it (a trailing comma would be).
+URL_SEPARATORS = st.sampled_from([" ", "\n", "\t", '"', "'", " <", "> "])
+
+
+@given(credential_urls(), URL_SEPARATORS, URL_SEPARATORS)
 def test_url_credentials_are_masked(case, left, right):
     url, password, params = case
     masked = secrets.mask(left + url + right)
