@@ -1,0 +1,32 @@
+# Template: add this workflow to the project that holds your MCP configuration.
+# Replace COMMIT_SHA with a reviewed commit of the scanner and adjust the config
+# paths. mcp-tools.json and mcp-pins.json are produced locally (see the README,
+# "Hash pinning") and committed after review.
+name: mcp-scan
+on:
+  push:
+    paths: [.mcp.json, .vscode/mcp.json, .cursor/mcp.json, mcp-tools.json, mcp-pins.json]
+  pull_request:
+    paths: [.mcp.json, .vscode/mcp.json, .cursor/mcp.json, mcp-tools.json, mcp-pins.json]
+jobs:
+  mcp-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install "mcp-security-scanner @ git+https://github.com/ConnorDev1337/mcp-security-scanner.git@COMMIT_SHA"
+      - run: >
+          mcp-scanner scan .mcp.json
+          --tools mcp-tools.json
+          --pins mcp-pins.json --frozen-pins
+          --json mcp-scanner.json --sarif mcp-scanner.sarif
+          --fail-on high
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mcp-scan-reports
+          path: |
+            mcp-scanner.json
+            mcp-scanner.sarif

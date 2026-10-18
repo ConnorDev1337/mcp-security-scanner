@@ -362,22 +362,14 @@ In CI the pattern is always the same: `mcp-tools.json` and `mcp-pins.json` commi
 configuration, `--frozen-pins` so the pipeline never approves anything on its own, and
 `--fail-on` as the threshold.
 
-### GitLab CI
+### GitHub Actions
 
-Template: [`examples/gitlab-ci.yml`](examples/gitlab-ci.yml). The job fails on findings of high
-severity or above and keeps the JSON report and the SARIF file as artifacts. While this repository
-is private, the consuming project must be in the scanner's *CI/CD job token* allowlist so that
-`pip install` can clone it with `CI_JOB_TOKEN`.
+Template: [`examples/github-actions.yml`](examples/github-actions.yml). The job fails on findings of
+high severity or above and keeps the JSON report and the SARIF file as artifacts.
 
 ```yaml
-mcp-scan:
-  image: python:3.13
-  script:
-    - pip install "mcp-security-scanner @ git+https://gitlab-ci-token:${CI_JOB_TOKEN}@github.com/ConnorDev1337/mcp-security-scanner.git@COMMIT_SHA"
-    - mcp-scanner scan .mcp.json --tools mcp-tools.json --pins mcp-pins.json --frozen-pins --json mcp-scanner.json --fail-on high
-  artifacts:
-    when: always
-    paths: [mcp-scanner.json]
+- run: pip install "mcp-security-scanner @ git+https://github.com/ConnorDev1337/mcp-security-scanner.git@COMMIT_SHA"
+- run: mcp-scanner scan .mcp.json --tools mcp-tools.json --pins mcp-pins.json --frozen-pins --json mcp-scanner.json --fail-on high
 ```
 
 ### GitHub Code Scanning
