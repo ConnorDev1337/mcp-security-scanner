@@ -1,11 +1,6 @@
 # MCP Security Scanner
 
-A **defensive** scanner for [MCP (Model Context Protocol)](https://modelcontextprotocol.io)
-servers. It analyzes MCP client configuration and the tools, prompts and resources that servers
-expose, and flags risks **before** you connect them to an agent: hidden instructions for the model
-(*tool poisoning*), invisible Unicode characters, excessive permissions, resources that publish
-credentials, plaintext secrets, and silent changes to definitions you already approved (*rug
-pull*).
+A **defensive** scanner for [MCP (Model Context Protocol)](https://modelcontextprotocol.io) servers. It analyzes MCP client configuration and the tools, prompts and resources that servers expose, and flags risks **before** you connect them to an agent: hidden instructions for the model (*tool poisoning*), invisible Unicode characters, excessive permissions, resources that publish credentials, plaintext secrets, and silent changes to definitions you already approved (*rug pull*).
 
 - No runtime dependencies (standard library only, Python ≥ 3.11).
 - **Executes nothing** by default: it only reads JSON/JSONC/TOML files.
@@ -75,8 +70,7 @@ mcp-scanner scan examples/claude_desktop_config.json --tools examples/tools.json
 
 ### 1. MCP client configuration
 
-The loader normalizes servers (command, arguments, environment variables, URL, headers) from all
-of these formats, detected by content:
+The loader normalizes servers (command, arguments, environment variables, URL, headers) from all of these formats, detected by content:
 
 | Client | File | Key |
 |---|---|---|
@@ -91,60 +85,29 @@ of these formats, detected by content:
 | Codex CLI | `~/.codex/config.toml` | `[mcp_servers.*]` |
 | Amazon Q | `~/.aws/amazonq/mcp.json` | `mcpServers` |
 
-The JSON parser is custom: it keeps the **line and column** of every key (for SARIF), accepts JSONC
-(comments and trailing commas) and detects **duplicate keys**, which `json.loads` silently drops (a
-reviewer may read the first definition while the client runs the last one).
+The JSON parser is custom: it keeps the **line and column** of every key (for SARIF), accepts JSONC (comments and trailing commas) and detects **duplicate keys**, which `json.loads` silently drops (a reviewer may read the first definition while the client runs the last one).
 
 ### 2. Tool, prompt and resource definitions
 
 Descriptions live on the server, not in the configuration. There are two ways to get them:
 
-- **Offline (recommended)**: `--tools [NAME=]FILE` accepts a `tools/list` result
-  (`{"tools": [...]}`), a full JSON-RPC response, a JSON list, or the multi-server dump produced by
-  the scanner itself. Next to `tools`, any of these shapes may carry the items of `prompts/list`,
-  `resources/list` and `resources/templates/list`:
+- **Offline (recommended)**: `--tools [NAME=]FILE` accepts a `tools/list` result (`{"tools": [...]}`), a full JSON-RPC response, a JSON list, or the multi-server dump produced by the scanner itself. Next to `tools`, any of these shapes may carry the items of `prompts/list`, `resources/list` and `resources/templates/list`:
 
   ```json
   {"servers": {"name": {"instructions": "...", "tools": [...], "prompts": [...],
                         "resources": [...], "resourceTemplates": [...]}}}
   ```
 
-  The new keys are optional: a manifest without them means "not collected" (older dumps keep
-  working and never look like a server that removed its prompts), while `"prompts": []` means
-  the server declares none.
-- **Live introspection (opt-in)**: `--introspect` performs `initialize` + `tools/list` over stdio
-  or Streamable HTTP, plus `prompts/list`, `resources/list` and `resources/templates/list`
-  (paginated) when the server advertises the `prompts` or `resources` capability. **It executes
-  the server command**: only use it inside a container/VM and with servers you would run anyway.
-  Save the result with `--dump-tools` to rescan offline (the dump includes prompts and resources).
-  The dump is meant to be committed, so it masks provider tokens and URL credentials in every
-  string, names included, exactly as the pin file does (`ghp_****(40 chars)`, `token=****`);
-  `--dump-raw` writes the definitions verbatim instead and prints a warning: do not commit that
-  file.
-  Hardening: minimal environment (only `PATH`, `HOME`, temp directories... plus the server's own
-  variables, not your whole environment), server requests (*sampling*, *roots*) are refused, a
-  single global deadline for every request, the process tree is killed, HTTP redirects are not
-  followed, and `http://` to non-local hosts is refused. A failed prompt or resource listing does
-  not discard the tools: it becomes a warning and that kind is left out of the analysis and the
-  pins.
+  The new keys are optional: a manifest without them means "not collected" (older dumps keep working and never look like a server that removed its prompts), while `"prompts": []` means the server declares none.
+- **Live introspection (opt-in)**: `--introspect` performs `initialize` + `tools/list` over stdio or Streamable HTTP, plus `prompts/list`, `resources/list` and `resources/templates/list` (paginated) when the server advertises the `prompts` or `resources` capability. **It executes the server command**: only use it inside a container/VM and with servers you would run anyway. Save the result with `--dump-tools` to rescan offline (the dump includes prompts and resources). The dump is meant to be committed, so it masks provider tokens and URL credentials in every string, names included, exactly as the pin file does (`ghp_****(40 chars)`, `token=****`); `--dump-raw` writes the definitions verbatim instead and prints a warning: do not commit that file. Hardening: minimal environment (only `PATH`, `HOME`, temp directories... plus the server's own variables, not your whole environment), server requests (*sampling*, *roots*) are refused, a single global deadline for every request, the process tree is killed, HTTP redirects are not followed, and `http://` to non-local hosts is refused. A failed prompt or resource listing does not discard the tools: it becomes a warning and that kind is left out of the analysis and the pins.
 
-**Metadata only.** The scanner never calls `resources/read` or `prompts/get`: resource contents
-and rendered prompt messages are not fetched, so reading a resource cannot trigger side effects
-and its data never reaches the scanner.
+**Metadata only.** The scanner never calls `resources/read` or `prompts/get`: resource contents and rendered prompt messages are not fetched, so reading a resource cannot trigger side effects and its data never reaches the scanner.
 
 **Every** text the model will read is scanned:
 
-- *Tools*: title, description, parameter descriptions and titles (recursively through
-  `properties`, `items`, `anyOf`, `$defs`...), `default`/`enum` values, `outputSchema`,
-  annotations and the server `instructions`.
-- *Prompts*: name, title, description, and the name, title and description of every argument.
-  Prompt templates reach the model when the user invokes them, so they carry the same poisoning
-  risk as tool descriptions.
-- *Resources and resource templates*: name, title, description and MIME type with the text rules;
-  the `uri`/`uriTemplate` with dedicated checks (invisible characters, embedded credentials,
-  sensitive local files, filesystem root or home directory). Hosts may attach resources to the
-  model context, so a server that lists `~/.ssh/id_rsa` as a resource can leak it without any tool
-  call.
+- *Tools*: title, description, parameter descriptions and titles (recursively through `properties`, `items`, `anyOf`, `$defs`...), `default`/`enum` values, `outputSchema`, annotations and the server `instructions`.
+- *Prompts*: name, title, description, and the name, title and description of every argument. Prompt templates reach the model when the user invokes them, so they carry the same poisoning risk as tool descriptions.
+- *Resources and resource templates*: name, title, description and MIME type with the text rules; the `uri`/`uriTemplate` with dedicated checks (invisible characters, embedded credentials, sensitive local files, filesystem root or home directory). Hosts may attach resources to the model context, so a server that lists `~/.ssh/id_rsa` as a resource can leak it without any tool call.
 
 ## Rules
 
@@ -192,113 +155,52 @@ and its data never reaches the scanner.
 | MCPS408 | medium | integrity | Prompt or resource not in the approved pin set |
 | MCPS409 | low | integrity | Approved prompt or resource no longer present |
 
-Rules MCPS101-MCPS110 and MCPS120-MCPS122 apply to tools, prompts and resources alike (titles
-still say "tool" for historical reasons). Findings about a prompt or a resource name it as
-`server/prompt:NAME` or `server/resource:URI` in the table, and in the `prompt`/`resource` fields
-of JSON and SARIF.
+Rules MCPS101-MCPS110 and MCPS120-MCPS122 apply to tools, prompts and resources alike (titles still say "tool" for historical reasons). Findings about a prompt or a resource name it as `server/prompt:NAME` or `server/resource:URI` in the table, and in the `prompt`/`resource` fields of JSON and SARIF.
 
-The default severity can be raised or lowered per finding (for example, `MCPS201` is *low* for a
-plain `cmd /c npx ...` and *high* when there is `&&`, `|` or inline code).
-`mcp-scanner rules -f json` includes each rule's description and remediation.
+The default severity can be raised or lowered per finding (for example, `MCPS201` is *low* for a plain `cmd /c npx ...` and *high* when there is `&&`, `|` or inline code). `mcp-scanner rules -f json` includes each rule's description and remediation.
 
 **Notable detection details**
 
-- *Hidden instructions*: text rules run on a normalized form (invisible characters removed, NFKC,
-  Cyrillic/Greek homoglyphs folded to Latin), so `ignore` split by a zero-width space (U+200B),
-  fullwidth `ｉｇｎｏｒｅ` or `dо nоt tеll` written with Cyrillic letters are still detected.
-  Negated instructions (*"do not include secrets"*) do not count as attacks.
-- *Unicode*: tag characters (U+E0000-E007F) and variation-selector sequences are **decoded**; the
-  hidden text is shown in the evidence and scanned again. The same applies to base64 blobs. ZWJ
-  inside emoji and single variation selectors are not flagged.
-- *Cross-server shadowing*: besides patterns (*"when this tool is available, the send_email tool
-  must..."*), the scanner flags tools, prompts and resources that mention tools of **another**
-  server by name, and tool names exposed by two servers.
-- *Resources*: URIs are percent-decoded before matching, so `file:///home/a/%2Essh/id_rsa` is still
-  an SSH key (`MCPS214`). Web URLs (`https://...`) are not treated as local paths, and `.env.example`
-  or `id_rsa.pub` are not secrets. A template exposes the filesystem root or a home directory
-  (`MCPS206`) when the expression follows the root/home prefix (`file:///{path}`,
-  `file:///home/alice/{+path}`), not when it ends in a fixed file name
-  (`file:///home/{user}/notes.txt`). Template expressions are not credentials (`?token={token}`).
-  Resources are identified by their URI with credentials masked, in reports and in the pin file.
-- *Permissions*: `env`, `sudo`, `cmd /c`, `sh -c` and `powershell -Command` are unwrapped (and
-  `-EncodedCommand` is decoded) to analyze the real command; `npx`/`uvx`/`pipx`/`pnpm dlx`/
-  `docker run`/`go run` are checked for exact versions or digests.
-- *Secrets*: provider formats (GitHub, GitLab, AWS, OpenAI, Anthropic, Slack, Stripe, Google,
-  Hugging Face, npm, PyPI, JWT, private keys...), sensitive key names with high-entropy literal
-  values, `--token VALUE` flags, `Authorization` headers and credentials in URLs. References
-  (`${VAR}`, `${input:x}`, `$VAR`, `%VAR%`) and placeholders are ignored. Evidence is **always**
-  masked (`ghp_****(40 chars)`), including in JSON and SARIF; query values are masked also when
-  percent-encoded (`sig=Ab%2Bc...`).
+- *Hidden instructions*: text rules run on a normalized form (invisible characters removed, NFKC, Cyrillic/Greek homoglyphs folded to Latin), so `ignore` split by a zero-width space (U+200B), fullwidth `ｉｇｎｏｒｅ` or `dо nоt tеll` written with Cyrillic letters are still detected. Negated instructions (*"do not include secrets"*) do not count as attacks.
+- *Unicode*: tag characters (U+E0000-E007F) and variation-selector sequences are **decoded**; the hidden text is shown in the evidence and scanned again. The same applies to base64 blobs. ZWJ inside emoji and single variation selectors are not flagged.
+- *Cross-server shadowing*: besides patterns (*"when this tool is available, the send_email tool must..."*), the scanner flags tools, prompts and resources that mention tools of **another** server by name, and tool names exposed by two servers.
+- *Resources*: URIs are percent-decoded before matching, so `file:///home/a/%2Essh/id_rsa` is still an SSH key (`MCPS214`). Web URLs (`https://...`) are not treated as local paths, and `.env.example` or `id_rsa.pub` are not secrets. A template exposes the filesystem root or a home directory (`MCPS206`) when the expression follows the root/home prefix (`file:///{path}`, `file:///home/alice/{+path}`), not when it ends in a fixed file name (`file:///home/{user}/notes.txt`). Template expressions are not credentials (`?token={token}`). Resources are identified by their URI with credentials masked, in reports and in the pin file.
+- *Permissions*: `env`, `sudo`, `cmd /c`, `sh -c` and `powershell -Command` are unwrapped (and `-EncodedCommand` is decoded) to analyze the real command; `npx`/`uvx`/`pipx`/`pnpm dlx`/ `docker run`/`go run` are checked for exact versions or digests.
+- *Secrets*: provider formats (GitHub, GitLab, AWS, OpenAI, Anthropic, Slack, Stripe, Google, Hugging Face, npm, PyPI, JWT, private keys...), sensitive key names with high-entropy literal values, `--token VALUE` flags, `Authorization` headers and credentials in URLs. References (`${VAR}`, `${input:x}`, `$VAR`, `%VAR%`) and placeholders are ignored. Evidence is **always** masked (`ghp_****(40 chars)`), including in JSON and SARIF; query values are masked also when percent-encoded (`sig=Ab%2Bc...`).
 
 ## Hash pinning
 
 Detects the *rug pull*: an approved tool, prompt or resource that later changes its description.
 
-Each run computes the SHA-256 of the canonical definition of every tool (plus the description and
-the schema separately), prompt, resource and resource template, of the server `instructions`, and
-of each component of the launch configuration (command, arguments, URL, **names** of environment
-variables and headers; never their values, so rotating a token is not a change). Definitions and
-instructions are masked first (see [Secrets in pinned definitions](#secrets-in-pinned-definitions)).
+Each run computes the SHA-256 of the canonical definition of every tool (plus the description and the schema separately), prompt, resource and resource template, of the server `instructions`, and of each component of the launch configuration (command, arguments, URL, **names** of environment variables and headers; never their values, so rotating a token is not a change). Definitions and instructions are masked first (see [Secrets in pinned definitions](#secrets-in-pinned-definitions)).
 
 - **First time (TOFU)**: whatever is not in the pin file is pinned silently.
-- **Afterwards**: any change produces `MCPS401`/`MCPS405`/`MCPS404` (tools, instructions, launch)
-  or `MCPS406`/`MCPS407` (prompts, resources and templates) with a **diff** of what changed; new
-  tools on an approved server raise `MCPS402` and new prompts or resources `MCPS408`; removed ones
-  raise `MCPS403`/`MCPS409`. Changes are **not** re-pinned automatically: they keep being
-  reported until they are approved.
-- `--update-pins` approves the current state. `--frozen-pins` (CI) never writes and reports
-  anything that is not approved. `--no-pins` disables the feature.
+- **Afterwards**: any change produces `MCPS401`/`MCPS405`/`MCPS404` (tools, instructions, launch) or `MCPS406`/`MCPS407` (prompts, resources and templates) with a **diff** of what changed; new tools on an approved server raise `MCPS402` and new prompts or resources `MCPS408`; removed ones raise `MCPS403`/`MCPS409`. Changes are **not** re-pinned automatically: they keep being reported until they are approved.
+- `--update-pins` approves the current state. `--frozen-pins` (CI) never writes and reports anything that is not approved. `--no-pins` disables the feature.
 
 Prompts and resources:
 
-- Prompts are keyed by name; resources and templates by URI. A changed URI is therefore a new
-  resource (`MCPS408`) plus a removed one (`MCPS409`).
-- Resource lists are often dynamic (files, database rows), so a new concrete resource is reported
-  as *low*; new prompts and templates stay *medium*. `size` and `annotations.lastModified` follow
-  the content and are not pinned.
-- Resources are keyed by their masked URI, and servers, tools and prompts by their masked name,
-  so a credential in an identifier never becomes a key (environment variable names kept for
-  launch diffs are masked the same way).
-- A kind that was not collected (a manifest without `prompts`, a failed listing) keeps its
-  approved entries untouched instead of being reported as removed.
+- Prompts are keyed by name; resources and templates by URI. A changed URI is therefore a new resource (`MCPS408`) plus a removed one (`MCPS409`).
+- Resource lists are often dynamic (files, database rows), so a new concrete resource is reported as *low*; new prompts and templates stay *medium*. `size` and `annotations.lastModified` follow the content and are not pinned.
+- Resources are keyed by their masked URI, and servers, tools and prompts by their masked name, so a credential in an identifier never becomes a key (environment variable names kept for launch diffs are masked the same way).
+- A kind that was not collected (a manifest without `prompts`, a failed listing) keeps its approved entries untouched instead of being reported as removed.
 
-Default file: `$MCP_SCANNER_PINS` or `~/.mcp-scanner/pins.json`; use `--pins` for another one. It
-stores hashes and the approved definition (for the diff), so it can be committed next to the
-project.
+Default file: `$MCP_SCANNER_PINS` or `~/.mcp-scanner/pins.json`; use `--pins` for another one. It stores hashes and the approved definition (for the diff), so it can be committed next to the project.
 
 ### Secrets in pinned definitions
 
-Servers sometimes embed credentials in their metadata: a token in a description, a schema
-`default` or `enum`, a connection string with a password in the instructions. The pin file is meant
-to be committed, so it must not copy them. Before hashing and storing, every string of a tool,
-prompt, resource, template and the instructions goes through the same masking as reports: provider
-tokens become `ghp_****(40 chars)`, URL passwords and sensitive query values (`token`, `api_key`,
-`sig`, ..., also when percent-encoded) become `****`.
+Servers sometimes embed credentials in their metadata: a token in a description, a schema `default` or `enum`, a connection string with a password in the instructions. The pin file is meant to be committed, so it must not copy them. Before hashing and storing, every string of a tool, prompt, resource, template and the instructions goes through the same masking as reports: provider tokens become `ghp_****(40 chars)`, URL passwords and sensitive query values (`token`, `api_key`, `sig`, ..., also when percent-encoded) become `****`.
 
-Hashing only the masked text would leave a blind spot: a server could change what sits inside a
-masked span (a token-shaped `sk-ant-Ignore_previous_rules...` of the same length, or arbitrary
-percent-encoded text in `?token=`) without changing the hash. Hashing the raw text instead would
-put a *verifier* in the file: for a low-entropy password, anyone who reads the pin file can hash
-candidates offline until one matches, and a salt stored next to the hash does not prevent that. So
-each masked value adds a marker to the hash, chosen by how guessable the value is:
+Hashing only the masked text would leave a blind spot: a server could change what sits inside a masked span (a token-shaped `sk-ant-Ignore_previous_rules...` of the same length, or arbitrary percent-encoded text in `?token=`) without changing the hash. Hashing the raw text instead would put a *verifier* in the file: for a low-entropy password, anyone who reads the pin file can hash candidates offline until one matches, and a salt stored next to the hash does not prevent that. So each masked value adds a marker to the hash, chosen by how guessable the value is:
 
 | Masked value | Bound in the hash by | Change inside it | Rotating it |
 |---|---|---|---|
 | Provider token (GitHub, OpenAI, Slack, AWS, JWT, ...) | HMAC-SHA256 keyed with a random per-file `salt` | detected | reported as a change |
 | URL password, sensitive query value | its length only | detected only if the length changes | not a change if the length is kept |
 
-Provider formats require long random strings, so their keyed digest cannot be brute-forced; the
-salt only stops the same token from being linked across pin files or matched against published
-hash lists. URL passwords are often chosen by people, so no digest of them is stored at all; the
-pin file reveals their length, never their content. Without masked values the hash is the plain
-SHA-256 of the definition, as before. Changes inside a masked value are reported as `a masked secret
-value changed`, without showing either value.
+Provider formats require long random strings, so their keyed digest cannot be brute-forced; the salt only stops the same token from being linked across pin files or matched against published hash lists. URL passwords are often chosen by people, so no digest of them is stored at all; the pin file reveals their length, never their content. Without masked values the hash is the plain SHA-256 of the definition, as before. Changes inside a masked value are reported as `a masked secret value changed`, without showing either value.
 
-When a pin file *as loaded* holds a credential in clear text (files written before format 3 stored
-tool definitions and instructions verbatim), the scan reports `MCPS304` once, naming the affected
-entries with the values masked, and writes the file back without them (with `--frozen-pins` it
-only reports). Earlier versions of the file, its git history and any copies still contain the
-credentials: **rotate them**, then commit the rewritten file.
+When a pin file *as loaded* holds a credential in clear text (files written before format 3 stored tool definitions and instructions verbatim), the scan reports `MCPS304` once, naming the affected entries with the values masked, and writes the file back without them (with `--frozen-pins` it only reports). Earlier versions of the file, its git history and any copies still contain the credentials: **rotate them**, then commit the rewritten file.
 
 ### Pin file versions
 
@@ -308,18 +210,10 @@ credentials: **rotate them**, then commit the rewritten file.
 | `2` | prompts and resources support | `prompts`, `resources`, `resource_templates`, stored masked |
 | `3` | this version | tool definitions and instructions stored masked, masked values bound in the hash, per-file `salt`, `"scheme": 3` on every record |
 
-This version reads all three and writes format `3`. Upgrading needs no action and reports no
-change:
+This version reads all three and writes format `3`. Upgrading needs no action and reports no change:
 
-- Records without a `scheme` are verified the way they were written: tools and instructions
-  against the raw definition (they are converted on load from the definition the old file stored),
-  prompts and resources against the format-2 masking (they keep their old hash until the item is
-  seen again, then are refreshed). For a definition without secrets every hash is identical across
-  formats.
-- The file is rewritten as format 3 the next time it changes, or right away when it held
-  credentials (`MCPS304`). `--frozen-pins` never writes: old records keep verifying, and the
-  prompts and resources of a format-1 file are reported as `MCPS408` until you run `--update-pins`
-  once.
+- Records without a `scheme` are verified the way they were written: tools and instructions against the raw definition (they are converted on load from the definition the old file stored), prompts and resources against the format-2 masking (they keep their old hash until the item is seen again, then are refreshed). For a definition without secrets every hash is identical across formats.
+- The file is rewritten as format 3 the next time it changes, or right away when it held credentials (`MCPS304`). `--frozen-pins` never writes: old records keep verifying, and the prompts and resources of a format-1 file are reported as `MCPS408` until you run `--update-pins` once.
 - Older scanners refuse format-3 files instead of misreading the masked definitions.
 
 Recommended workflow in a repository:
@@ -341,12 +235,7 @@ mcp-scanner scan .mcp.json --tools mcp-tools.json --pins mcp-pins.json --update-
 mcp-scanner scan .mcp.json --tools mcp-tools.json --pins mcp-pins.json --frozen-pins
 ```
 
-The committed dump holds masked definitions while live introspection sees the secrets, so a
-definition that embeds one is verified on the masked form whenever one side lacks the values:
-a masked dump matches pins made from the live definitions, and pins approved from the dump match
-the live definitions (the next live run binds their values in the pin file). A change inside a
-masked value is therefore only detected between two live runs. When both the pins and the current
-definitions carry the values, only an exact match approves.
+The committed dump holds masked definitions while live introspection sees the secrets, so a definition that embeds one is verified on the masked form whenever one side lacks the values: a masked dump matches pins made from the live definitions, and pins approved from the dump match the live definitions (the next live run binds their values in the pin file). A change inside a masked value is therefore only detected between two live runs. When both the pins and the current definitions carry the values, only an exact match approves.
 
 ## Outputs and exit codes
 
@@ -362,29 +251,19 @@ definitions carry the values, only an exact match approves.
 | `--color auto\|always\|never` | Color in the table (honors `NO_COLOR`) |
 | `--root DIR` | Base directory for relative paths in reports (default: cwd) |
 
-Every file the scanner writes (pin file, dump, `-o`, `--json`, `--sarif`, and redirected
-standard output) uses LF line endings on every platform, so committed files do not change
-between operating systems.
+Every file the scanner writes (pin file, dump, `-o`, `--json`, `--sarif`, and redirected standard output) uses LF line endings on every platform, so committed files do not change between operating systems.
 
-Exit codes: `0` no findings at or above the threshold · `1` findings at or above the threshold ·
-`2` usage error or an input (config, manifest, pin file) could not be read.
+Exit codes: `0` no findings at or above the threshold · `1` findings at or above the threshold · `2` usage error or an input (config, manifest, pin file) could not be read.
 
-The JSON report (`schema: mcp-security-scanner/report/v1`) includes a summary by severity and by
-kind (tools, prompts, resources, resource templates), servers (with masked arguments and URLs and
-only the *names* of environment variables), inventories (`null` for kinds that were not
-collected), findings with `server`/`tool`/`prompt`/`resource`, location (`path`, `line`,
-`column`, JSON Pointer), remediation and fingerprint.
+The JSON report (`schema: mcp-security-scanner/report/v1`) includes a summary by severity and by kind (tools, prompts, resources, resource templates), servers (with masked arguments and URLs and only the *names* of environment variables), inventories (`null` for kinds that were not collected), findings with `server`/`tool`/`prompt`/`resource`, location (`path`, `line`, `column`, JSON Pointer), remediation and fingerprint.
 
 ## CI integration (GitLab and GitHub)
 
-In CI the pattern is always the same: `mcp-tools.json` and `mcp-pins.json` committed next to the
-configuration, `--frozen-pins` so the pipeline never approves anything on its own, and
-`--fail-on` as the threshold.
+In CI the pattern is always the same: `mcp-tools.json` and `mcp-pins.json` committed next to the configuration, `--frozen-pins` so the pipeline never approves anything on its own, and `--fail-on` as the threshold.
 
 ### GitHub Actions
 
-Template: [`examples/github-actions.yml`](examples/github-actions.yml). The job fails on findings of
-high severity or above and keeps the JSON report and the SARIF file as artifacts.
+Template: [`examples/github-actions.yml`](examples/github-actions.yml). The job fails on findings of high severity or above and keeps the JSON report and the SARIF file as artifacts.
 
 ```yaml
 - run: pip install "mcp-security-scanner @ git+https://github.com/ConnorDev1337/mcp-security-scanner.git@COMMIT_SHA"
@@ -393,13 +272,9 @@ high severity or above and keeps the JSON report and the SARIF file as artifacts
 
 ### GitHub Code Scanning
 
-The SARIF output lists every rule with `security-severity` (GitHub ranks them as
-critical/high/medium/low), paths relative to `%SRCROOT%` with line and column, and stable
-`partialFingerprints` so alerts survive line changes. The tests validate it against the official
-SARIF 2.1.0 schema.
+The SARIF output lists every rule with `security-severity` (GitHub ranks them as critical/high/medium/low), paths relative to `%SRCROOT%` with line and column, and stable `partialFingerprints` so alerts survive line changes. The tests validate it against the official SARIF 2.1.0 schema.
 
-Ready-to-copy template: [`examples/github-code-scanning.yml`](examples/github-code-scanning.yml).
-The essentials:
+Ready-to-copy template: [`examples/github-code-scanning.yml`](examples/github-code-scanning.yml). The essentials:
 
 ```yaml
 permissions:
@@ -418,8 +293,7 @@ steps:
 
 ### Assets
 
-- Secrets reachable from the user's machine: SSH keys, cloud credentials, tokens in environment
-  variables and in the MCP configurations themselves.
+- Secrets reachable from the user's machine: SSH keys, cloud credentials, tokens in environment variables and in the MCP configurations themselves.
 - Conversation data: history, *system prompt*, the user's documents.
 - The ability to act on the user's behalf: send e-mail, push commits, move money, run code.
 - The integrity of the trust decision: what the user approved is what runs.
@@ -454,71 +328,34 @@ steps:
 
 Everything it analyzes is untrusted input, so:
 
-- By default it neither executes nor contacts anything; `--introspect` is explicit and warns on
-  stderr.
-- All evidence is **sanitized** before printing: control characters, ANSI sequences and invisible
-  Unicode are shown as escapes (for example U+001B or U+200B as backslash-u sequences). A hostile
-  description cannot rewrite the terminal or hide parts of the report.
-- Secrets are masked in every output and in fingerprints (which are meant to be uploaded to
-  GitHub); the pin file never stores the values of environment variables or headers, nor
-  provider tokens or URL credentials embedded in definitions or instructions, and reports any it
-  finds from an older format (`MCPS304`).
+- By default it neither executes nor contacts anything; `--introspect` is explicit and warns on stderr.
+- All evidence is **sanitized** before printing: control characters, ANSI sequences and invisible Unicode are shown as escapes (for example U+001B or U+200B as backslash-u sequences). A hostile description cannot rewrite the terminal or hide parts of the report.
+- Secrets are masked in every output and in fingerprints (which are meant to be uploaded to GitHub); the pin file never stores the values of environment variables or headers, nor provider tokens or URL credentials embedded in definitions or instructions, and reports any it finds from an older format (`MCPS304`).
 - Introspection only lists definitions; it never reads resources or renders prompts.
 - The parser limits file size (16 MiB) and nesting depth; the pin file is written atomically.
 
 ### Out of scope
 
 - Analyzing the server's **code** (SAST) or its runtime behaviour.
-- Indirect injection through tool **results** (web content, issues or e-mails the server returns at
-  run time).
-- Resource **contents** (`resources/read`) and rendered prompt **messages** (`prompts/get`): only
-  the metadata from `prompts/list`, `resources/list` and `resources/templates/list` is analyzed.
-  Prompt messages depend on the arguments and resource contents are data, so a poisoned prompt
-  body or a resource that serves injected text at read time is not detected.
+- Indirect injection through tool **results** (web content, issues or e-mails the server returns at run time).
+- Resource **contents** (`resources/read`) and rendered prompt **messages** (`prompts/get`): only the metadata from `prompts/list`, `resources/list` and `resources/templates/list` is analyzed. Prompt messages depend on the arguments and resource contents are data, so a poisoned prompt body or a resource that serves injected text at read time is not detected.
 - OAuth authentication/authorization of remote servers and verification of identity or signatures.
 
 ## Limitations
 
-- **Heuristic.** Text rules are patterns (in English). Creative paraphrases, other languages or
-  unanticipated obfuscation will produce false negatives, and very imperative legitimate
-  descriptions will produce false positives. A clean report does not prove a server is safe; it is
-  an aid for human review.
-- **What the scanner sees may not be what the agent sees.** A malicious server can serve clean
-  descriptions depending on `clientInfo`, the time or the session, and change them later. Hash
-  pinning detects changes between scanner runs, not what happens inside each client session.
-- **TOFU**: whatever is pinned the first time is considered approved; review the report before the
-  first commit of the pin file. Pins are keyed by server name.
-- Introspection does not support the legacy SSE transport (use `--tools`) or interactive OAuth;
-  VS Code's `${input:...}` cannot be resolved non-interactively.
-- Secret detection is based on known formats and entropy; it does not check whether a token is
-  live.
-- Only declared capabilities (name, description, annotations, schema) are analyzed; a server can do
-  more than it declares. A resource template only shows what the server *claims* to serve; the
-  scanner cannot tell whether `notes://{id}` really maps to files elsewhere on disk.
-- Sensitive-path detection on resource URIs knows common credential locations (SSH, cloud CLIs,
-  `.env`, MCP client configs, shell history, browser and keychain stores); other secrets stored
-  under generic names are not recognized.
-- Pin-file masking covers what the secret rules recognize: provider token formats and URL
-  credentials. A credential in another shape (a bare hex key in a description, "password: x")
-  is stored and hashed as written. Tool, prompt and server names are stored as they are.
-- The keyed digest of a provider token is only as strong as the token. Real tokens are random, but
-  AWS access key IDs partly encode the account ID (they identify a key rather than authenticate
-  with it), and a hand-made value that happens to match a format (`sk-` plus 20 characters) could
-  be guessed from its digest if it is weak.
-- A change inside a masked URL password or query value that keeps its length is not detected by
-  pinning (the text rules still scan the raw value on every run), and the pin file reveals that
-  length. Launch components are hashed, not stored, but the hash covers literal arguments and URLs,
-  so a weak password written in the configuration could be guessed from it by someone who also
-  knows the rest of the command line.
-- `--dump-tools` masks the secrets it recognizes (provider tokens, URL passwords and sensitive
-  query values), not every credential: a password in free text stays in the dump. Review it,
-  and the `MCPS301`/`MCPS302` findings, before committing it. Offline scans of a masked dump do
-  not see the masked values; the text rules see them on every live run.
-- Servers whose resource lists change often (one resource per file or row) produce `MCPS408`/
-  `MCPS409` on every run with pinning; they are *low* by default and below the default
-  `--fail-on high`.
-- Per-client configuration paths change between application versions; if one is missing, pass it
-  explicitly.
+- **Heuristic.** Text rules are patterns (in English). Creative paraphrases, other languages or unanticipated obfuscation will produce false negatives, and very imperative legitimate descriptions will produce false positives. A clean report does not prove a server is safe; it is an aid for human review.
+- **What the scanner sees may not be what the agent sees.** A malicious server can serve clean descriptions depending on `clientInfo`, the time or the session, and change them later. Hash pinning detects changes between scanner runs, not what happens inside each client session.
+- **TOFU**: whatever is pinned the first time is considered approved; review the report before the first commit of the pin file. Pins are keyed by server name.
+- Introspection does not support the legacy SSE transport (use `--tools`) or interactive OAuth; VS Code's `${input:...}` cannot be resolved non-interactively.
+- Secret detection is based on known formats and entropy; it does not check whether a token is live.
+- Only declared capabilities (name, description, annotations, schema) are analyzed; a server can do more than it declares. A resource template only shows what the server *claims* to serve; the scanner cannot tell whether `notes://{id}` really maps to files elsewhere on disk.
+- Sensitive-path detection on resource URIs knows common credential locations (SSH, cloud CLIs, `.env`, MCP client configs, shell history, browser and keychain stores); other secrets stored under generic names are not recognized.
+- Pin-file masking covers what the secret rules recognize: provider token formats and URL credentials. A credential in another shape (a bare hex key in a description, "password: x") is stored and hashed as written. Tool, prompt and server names are stored as they are.
+- The keyed digest of a provider token is only as strong as the token. Real tokens are random, but AWS access key IDs partly encode the account ID (they identify a key rather than authenticate with it), and a hand-made value that happens to match a format (`sk-` plus 20 characters) could be guessed from its digest if it is weak.
+- A change inside a masked URL password or query value that keeps its length is not detected by pinning (the text rules still scan the raw value on every run), and the pin file reveals that length. Launch components are hashed, not stored, but the hash covers literal arguments and URLs, so a weak password written in the configuration could be guessed from it by someone who also knows the rest of the command line.
+- `--dump-tools` masks the secrets it recognizes (provider tokens, URL passwords and sensitive query values), not every credential: a password in free text stays in the dump. Review it, and the `MCPS301`/`MCPS302` findings, before committing it. Offline scans of a masked dump do not see the masked values; the text rules see them on every live run.
+- Servers whose resource lists change often (one resource per file or row) produce `MCPS408`/ `MCPS409` on every run with pinning; they are *low* by default and below the default `--fail-on high`.
+- Per-client configuration paths change between application versions; if one is missing, pass it explicitly.
 
 ## Development
 
@@ -530,28 +367,14 @@ ruff check src tests && ruff format --check src tests
 HYPOTHESIS_PROFILE=fuzz pytest tests/test_fuzz_*.py   # long property-based run
 ```
 
-The property-based tests (`tests/test_fuzz_*.py`, [Hypothesis](https://hypothesis.works/)) run
-with a small deterministic profile (`ci`) by default. The `fuzz` profile, selected with
-`HYPOTHESIS_PROFILE=fuzz` or `pytest --hypothesis-profile=fuzz`, tries many more random examples;
-a failure prints the shrunk input and a `@reproduce_failure` blob to replay it. Every bug found
-this way gets a regular regression test with the minimal example.
+The property-based tests (`tests/test_fuzz_*.py`, [Hypothesis](https://hypothesis.works/)) run with a small deterministic profile (`ci`) by default. The `fuzz` profile, selected with `HYPOTHESIS_PROFILE=fuzz` or `pytest --hypothesis-profile=fuzz`, tries many more random examples; a failure prints the shrunk input and a `@reproduce_failure` blob to replay it. Every bug found this way gets a regular regression test with the minimal example.
 
 CI:
 
-- **GitLab** (`.gitlab-ci.yml`, the primary repository): ruff lint, tests on Python
-  3.11/3.12/3.13 on Linux (minimum coverage 85 %, JUnit and Cobertura reports in merge requests)
-  and an end-to-end *self-scan* of the examples that checks exit codes and keeps SARIF/JSON as
-  artifacts.
-- **GitHub** (`.github/workflows/ci.yml`, for a future mirror): the same with a Linux/Windows/macOS
-  matrix. Actions are pinned by SHA and Dependabot keeps them up to date.
+- **GitLab** (`.gitlab-ci.yml`, the primary repository): ruff lint, tests on Python 3.11/3.12/3.13 on Linux (minimum coverage 85 %, JUnit and Cobertura reports in merge requests) and an end-to-end *self-scan* of the examples that checks exit codes and keeps SARIF/JSON as artifacts.
+- **GitHub** (`.github/workflows/ci.yml`, for a future mirror): the same with a Linux/Windows/macOS matrix. Actions are pinned by SHA and Dependabot keeps them up to date.
 
-The tests use their own cases: known attacks (*tool poisoning* with `<IMPORTANT>`, *shadowing* of
-`send_email`, *ASCII smuggling* with Unicode tags, variation selectors, base64, Trojan Source,
-ANSI, poisoned prompts and resources that publish credentials), real legitimate descriptions to
-measure false positives, and a fake MCP server over stdio (tools only, or with paginated prompts
-and resources, failing or hanging listings) and one over HTTP (JSON and SSE) for introspection.
-Test tokens are generated at run time so the repository contains no strings shaped like real
-credentials.
+The tests use their own cases: known attacks (*tool poisoning* with `<IMPORTANT>`, *shadowing* of `send_email`, *ASCII smuggling* with Unicode tags, variation selectors, base64, Trojan Source, ANSI, poisoned prompts and resources that publish credentials), real legitimate descriptions to measure false positives, and a fake MCP server over stdio (tools only, or with paginated prompts and resources, failing or hanging listings) and one over HTTP (JSON and SSE) for introspection. Test tokens are generated at run time so the repository contains no strings shaped like real credentials.
 
 ```text
 src/mcp_scanner/
